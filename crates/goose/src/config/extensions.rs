@@ -119,6 +119,11 @@ pub fn get_all_extensions() -> Vec<ExtensionEntry> {
     extensions.into_values().collect()
 }
 
+pub fn get_all_extensions_with_keys() -> Vec<(String, ExtensionEntry)> {
+    let extensions = get_extensions_map();
+    extensions.into_iter().collect()
+}
+
 pub fn get_all_extension_names() -> Vec<String> {
     let extensions = get_extensions_map();
     extensions.keys().cloned().collect()

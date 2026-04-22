@@ -109,6 +109,49 @@ fn test_custom_get_extensions() {
             response.get("warnings").is_some(),
             "missing 'warnings' field"
         );
+        if let Some(extension) = response
+            .get("extensions")
+            .and_then(|value| value.as_array())
+            .and_then(|extensions| extensions.first())
+        {
+            assert!(
+                extension.get("config_key").is_some(),
+                "missing 'config_key' field"
+            );
+        }
+    });
+}
+
+#[test]
+fn test_custom_get_session_extension_statuses() {
+    run_test(async {
+        let openai = OpenAiFixture::new(vec![], Arc::new(EnforceSessionId::default())).await;
+        let mut conn = AcpServerConnection::new(TestConnectionConfig::default(), openai).await;
+
+        let SessionData { session, .. } = conn.new_session().await.unwrap();
+        let session_id = session.session_id().0.clone();
+
+        let result = send_custom(
+            conn.cx(),
+            "_goose/session/extensions/statuses",
+            serde_json::json!({ "sessionId": session_id }),
+        )
+        .await;
+        assert!(result.is_ok(), "expected ok, got: {:?}", result);
+
+        let response = result.unwrap();
+        let extensions = response
+            .get("extensions")
+            .and_then(|value| value.as_array())
+            .expect("missing 'extensions' array");
+
+        if let Some(extension) = extensions.first() {
+            assert!(extension.get("status").is_some(), "missing 'status' field");
+            assert!(
+                extension.get("config_key").is_some(),
+                "missing 'config_key' field"
+            );
+        }
     });
 }
 

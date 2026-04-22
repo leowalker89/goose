@@ -7,7 +7,9 @@ use crate::agents::mcp_client::McpClientTrait;
 use crate::agents::platform_extensions::developer::DeveloperClient;
 use crate::agents::{Agent, AgentConfig, ExtensionConfig, GoosePlatform, SessionConfig};
 use crate::config::base::CONFIG_YAML_NAME;
-use crate::config::extensions::get_enabled_extensions_with_config;
+use crate::config::extensions::{
+    get_all_extensions_with_keys, get_enabled_extensions_with_config, name_to_key,
+};
 use crate::config::paths::Paths;
 use crate::config::permission::PermissionManager;
 use crate::config::{Config, GooseMode};
@@ -56,7 +58,7 @@ use sacp::{
     Agent as SacpAgent, ByteStreams, Client, ConnectionTo, Dispatch, HandleDispatchFrom, Handled,
     Responder,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use strum::{EnumMessage, VariantNames};
 use tokio::sync::{Mutex, OnceCell};
@@ -107,6 +109,7 @@ struct GooseAcpSession {
     internal_session_id: String,
     tool_requests: HashMap<String, crate::conversation::message::ToolRequest>,
     cancel_token: Option<CancellationToken>,
+    extension_errors: HashMap<String, String>,
     /// Working directory set while the agent was still loading.
     /// Applied once the agent becomes ready.
     pending_working_dir: Option<std::path::PathBuf>,
@@ -229,6 +232,40 @@ fn mcp_server_to_extension_config(mcp_server: McpServer) -> Result<ExtensionConf
         McpServer::Sse(_) => Err("SSE is unsupported, migrate to streamable_http".to_string()),
         _ => Err("Unknown MCP server type".to_string()),
     }
+}
+
+fn extension_entry_json(
+    config_key: String,
+    enabled: bool,
+    config: ExtensionConfig,
+) -> Result<serde_json::Value, serde_json::Error> {
+    let mut value = serde_json::to_value(crate::config::ExtensionEntry { enabled, config })?;
+    if let serde_json::Value::Object(ref mut obj) = value {
+        obj.insert(
+            "config_key".to_string(),
+            serde_json::Value::String(config_key),
+        );
+    }
+    Ok(value)
+}
+
+fn extension_status_json(
+    config: ExtensionConfig,
+    status: &str,
+    error: Option<String>,
+) -> Result<serde_json::Value, serde_json::Error> {
+    let config_key = config.key();
+    let mut value = extension_entry_json(config_key, true, config)?;
+    if let serde_json::Value::Object(ref mut obj) = value {
+        obj.insert(
+            "status".to_string(),
+            serde_json::Value::String(status.to_string()),
+        );
+        if let Some(error) = error {
+            obj.insert("error".to_string(), serde_json::Value::String(error));
+        }
+    }
+    Ok(value)
 }
 
 fn get_requested_line(arguments: Option<&rmcp::model::JsonObject>) -> Option<u32> {
@@ -1071,21 +1108,33 @@ impl GooseAcpAgent {
                                 .add_extension(ext, None, None, sid_inner.as_deref())
                                 .await
                             {
-                                Ok(_) => debug!(
-                                    target: "perf",
-                                    sid = %sid_log,
-                                    extension = %name,
-                                    ms = t_one.elapsed().as_millis() as u64,
-                                    "perf: agent_setup extension_loaded"
-                                ),
+                                Ok(_) => {
+                                    debug!(
+                                        target: "perf",
+                                        sid = %sid_log,
+                                        extension = %name,
+                                        ms = t_one.elapsed().as_millis() as u64,
+                                        "perf: agent_setup extension_loaded"
+                                    );
+                                    crate::agents::ExtensionLoadResult {
+                                        name,
+                                        success: true,
+                                        error: None,
+                                    }
+                                }
                                 Err(e) => {
-                                    warn!(extension = %name, error = %e, "extension load failed")
+                                    warn!(extension = %name, error = %e, "extension load failed");
+                                    crate::agents::ExtensionLoadResult {
+                                        name,
+                                        success: false,
+                                        error: Some(e.to_string()),
+                                    }
                                 }
                             }
                         }
                     })
                     .collect::<Vec<_>>();
-                futures::future::join_all(extension_futures).await;
+                let extension_results = futures::future::join_all(extension_futures).await;
                 debug!(
                     target: "perf",
                     sid = %sid,
@@ -1093,6 +1142,19 @@ impl GooseAcpAgent {
                     extensions = ext_count,
                     "perf: agent_setup extensions_total"
                 );
+
+                let extension_errors = extension_results
+                    .into_iter()
+                    .filter_map(|result| {
+                        result.error.map(|error| (name_to_key(&result.name), error))
+                    })
+                    .collect::<HashMap<_, _>>();
+                {
+                    let mut locked = sessions.lock().await;
+                    if let Some(session) = locked.get_mut(session_id.0.as_ref()) {
+                        session.extension_errors = extension_errors;
+                    }
+                }
 
                 if let Some((client, config)) = acp_developer {
                     let info = client.get_info().cloned();
@@ -1650,6 +1712,7 @@ impl GooseAcpAgent {
             internal_session_id: internal_session_id.clone(),
             tool_requests: HashMap::new(),
             cancel_token: None,
+            extension_errors: HashMap::new(),
             pending_working_dir: None,
         };
         self.sessions
@@ -2072,6 +2135,7 @@ impl GooseAcpAgent {
             internal_session_id: internal_session_id.clone(),
             tool_requests: replay_tool_requests,
             cancel_token: None,
+            extension_errors: HashMap::new(),
             pending_working_dir: None,
         };
         self.sessions
@@ -2692,6 +2756,7 @@ impl GooseAcpAgent {
             internal_session_id: internal_session_id.clone(),
             tool_requests: HashMap::new(),
             cancel_token: None,
+            extension_errors: HashMap::new(),
             pending_working_dir: None,
         };
         self.sessions
@@ -2755,11 +2820,25 @@ impl GooseAcpAgent {
         let internal_id = self.internal_session_id(&req.session_id).await?;
         let config: ExtensionConfig = serde_json::from_value(req.config)
             .map_err(|e| sacp::Error::invalid_params().data(format!("bad config: {e}")))?;
+        let config_key = config.key();
         let agent = self.get_session_agent(&req.session_id, None).await?;
-        agent
+        let result = agent
             .add_extension(config, &internal_id)
-            .await
-            .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
+            .await;
+        let mut sessions = self.sessions.lock().await;
+        if let Some(session) = sessions.get_mut(&req.session_id) {
+            match &result {
+                Ok(_) => {
+                    session.extension_errors.remove(&config_key);
+                }
+                Err(error) => {
+                    session
+                        .extension_errors
+                        .insert(config_key, error.to_string());
+                }
+            }
+        }
+        result.map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
         Ok(EmptyResponse {})
     }
 
@@ -2769,11 +2848,16 @@ impl GooseAcpAgent {
         req: RemoveExtensionRequest,
     ) -> Result<EmptyResponse, sacp::Error> {
         let internal_id = self.internal_session_id(&req.session_id).await?;
+        let config_key = name_to_key(&req.name);
         let agent = self.get_session_agent(&req.session_id, None).await?;
         agent
             .remove_extension(&req.name, &internal_id)
             .await
             .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
+        let mut sessions = self.sessions.lock().await;
+        if let Some(session) = sessions.get_mut(&req.session_id) {
+            session.extension_errors.remove(&config_key);
+        }
         Ok(EmptyResponse {})
     }
 
@@ -2866,11 +2950,11 @@ impl GooseAcpAgent {
 
     #[custom_method(GetExtensionsRequest)]
     async fn on_get_extensions(&self) -> Result<GetExtensionsResponse, sacp::Error> {
-        let extensions = crate::config::extensions::get_all_extensions();
+        let extensions = get_all_extensions_with_keys();
         let warnings = crate::config::extensions::get_warnings();
         let extensions_json = extensions
             .into_iter()
-            .map(|e| serde_json::to_value(&e))
+            .map(|(config_key, entry)| extension_entry_json(config_key, entry.enabled, entry.config))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
         Ok(GetExtensionsResponse {
@@ -2898,11 +2982,72 @@ impl GooseAcpAgent {
 
         let extensions_json = extensions
             .into_iter()
-            .map(|e| serde_json::to_value(&e))
+            .map(|config| extension_entry_json(config.key(), true, config))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
 
         Ok(GetSessionExtensionsResponse {
+            extensions: extensions_json,
+        })
+    }
+
+    #[custom_method(GetSessionExtensionStatusesRequest)]
+    async fn on_get_session_extension_statuses(
+        &self,
+        req: GetSessionExtensionStatusesRequest,
+    ) -> Result<GetSessionExtensionStatusesResponse, sacp::Error> {
+        let internal_id = self.internal_session_id(&req.session_id).await?;
+        let session = self
+            .session_manager
+            .get_session(&internal_id, false)
+            .await
+            .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
+        let extensions = EnabledExtensionsState::extensions_or_default(
+            Some(&session.extension_data),
+            crate::config::Config::global(),
+        );
+
+        let (progress, extension_errors) = {
+            let sessions = self.sessions.lock().await;
+            let acp_session = sessions.get(&req.session_id).ok_or_else(|| {
+                sacp::Error::resource_not_found(Some(req.session_id.clone()))
+                    .data(format!("Session not found: {}", req.session_id))
+            })?;
+            let progress = match &acp_session.agent {
+                AgentHandle::Ready(agent) => Some(Ok(AgentSetupProgress::FullyReady(agent.clone()))),
+                AgentHandle::Loading(rx) => rx.borrow().clone(),
+            };
+            (progress, acp_session.extension_errors.clone())
+        };
+
+        let (agent, is_loading) = match progress {
+            Some(Ok(AgentSetupProgress::ProviderReady(agent))) => (Some(agent), true),
+            Some(Ok(AgentSetupProgress::FullyReady(agent))) => (Some(agent), false),
+            Some(Err(_)) | None => (None, true),
+        };
+
+        let loaded_extensions = match agent {
+            Some(agent) => agent.list_extensions().await.into_iter().collect::<HashSet<_>>(),
+            None => HashSet::new(),
+        };
+
+        let extensions_json = extensions
+            .into_iter()
+            .map(|config| {
+                let config_key = config.key();
+                let status = if loaded_extensions.contains(&config_key) {
+                    "connected"
+                } else if is_loading {
+                    "loading"
+                } else {
+                    "failed"
+                };
+                extension_status_json(config, status, extension_errors.get(&config_key).cloned())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| sacp::Error::internal_error().data(e.to_string()))?;
+
+        Ok(GetSessionExtensionStatusesResponse {
             extensions: extensions_json,
         })
     }

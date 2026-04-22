@@ -53,6 +53,13 @@ export type ExtensionEntry = ExtensionConfig & {
   enabled: boolean;
 };
 
+export type ExtensionStatus = "connected" | "failed" | "loading";
+
+export type ExtensionStatusEntry = ExtensionEntry & {
+  status: ExtensionStatus;
+  error?: string;
+};
+
 export function getDisplayName(ext: ExtensionEntry): string {
   if (ext.type === "builtin" && ext.display_name) {
     return ext.display_name;

@@ -46,7 +46,7 @@
       "folderNotSet": "Folder not set",
       "noChanges": "No uncommitted changes",
       "noProjectAssigned": "No project assigned.",
-      "noExtensions": "No extensions enabled",
+      "noExtensions": "No extensions active in this chat",
       "noMatchingExtensions": "No matching extensions"
     },
     "errors": {
@@ -91,6 +91,11 @@
       "changes": "Changes",
       "changesOnBranch": "on",
       "extensions": "Extensions",
+      "extensionStatus": {
+        "connected": "Connected",
+        "failed": "Failed",
+        "loading": "Loading"
+      },
       "searchExtensions": "Search extensions...",
       "workspace": "Workspace"
     }

@@ -41,6 +41,11 @@
       "responseType": "GetSessionExtensionsResponse"
     },
     {
+      "method": "_goose/session/extensions/statuses",
+      "requestType": "GetSessionExtensionStatusesRequest",
+      "responseType": "GetSessionExtensionStatusesResponse"
+    },
+    {
       "method": "_goose/providers/list",
       "requestType": "ListProvidersRequest",
       "responseType": "ListProvidersResponse"

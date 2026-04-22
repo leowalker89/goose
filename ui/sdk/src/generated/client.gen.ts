@@ -34,6 +34,8 @@ import type {
   ExportSourceResponse,
   GetExtensionsRequest,
   GetExtensionsResponse,
+  GetSessionExtensionStatusesRequest,
+  GetSessionExtensionStatusesResponse,
   GetSessionExtensionsRequest,
   GetSessionExtensionsResponse,
   GetToolsRequest,
@@ -73,6 +75,7 @@ import {
   zExportSessionResponse,
   zExportSourceResponse,
   zGetExtensionsResponse,
+  zGetSessionExtensionStatusesResponse,
   zGetSessionExtensionsResponse,
   zGetToolsResponse,
   zImportSessionResponse,
@@ -130,6 +133,18 @@ export class GooseExtClient {
     return zGetSessionExtensionsResponse.parse(
       raw,
     ) as GetSessionExtensionsResponse;
+  }
+
+  async GooseSessionExtensionsStatuses(
+    params: GetSessionExtensionStatusesRequest,
+  ): Promise<GetSessionExtensionStatusesResponse> {
+    const raw = await this.conn.extMethod(
+      "_goose/session/extensions/statuses",
+      params,
+    );
+    return zGetSessionExtensionStatusesResponse.parse(
+      raw,
+    ) as GetSessionExtensionStatusesResponse;
   }
 
   async GooseProvidersList(

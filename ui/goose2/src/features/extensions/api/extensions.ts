@@ -1,5 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { ExtensionConfig, ExtensionEntry } from "../types";
+import { getClient } from "@/shared/api/acpConnection";
+import type {
+  ExtensionConfig,
+  ExtensionEntry,
+  ExtensionStatusEntry,
+} from "../types";
+
+const EXTENSIONS_CONFIG_KEY = "extensions";
 
 export function nameToKey(name: string): string {
   return name
@@ -8,8 +14,41 @@ export function nameToKey(name: string): string {
     .toLowerCase();
 }
 
+function toExtensionsConfigMap(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return {};
+}
+
+async function updateExtensionsConfig(
+  updater: (extensions: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  const client = await getClient();
+  const current = await client.goose.GooseConfigRead({
+    key: EXTENSIONS_CONFIG_KEY,
+  });
+  const next = updater(toExtensionsConfigMap(current.value));
+  await client.goose.GooseConfigUpsert({
+    key: EXTENSIONS_CONFIG_KEY,
+    value: next,
+  });
+}
+
 export async function listExtensions(): Promise<ExtensionEntry[]> {
-  return invoke("list_extensions");
+  const client = await getClient();
+  const response = await client.goose.GooseConfigExtensions({});
+  return (response.extensions ?? []) as ExtensionEntry[];
+}
+
+export async function listSessionExtensionStatuses(
+  sessionId: string,
+): Promise<ExtensionStatusEntry[]> {
+  const client = await getClient();
+  const response = await client.goose.GooseSessionExtensionsStatuses({
+    sessionId,
+  });
+  return (response.extensions ?? []) as ExtensionStatusEntry[];
 }
 
 export async function addExtension(
@@ -17,20 +56,40 @@ export async function addExtension(
   extensionConfig: ExtensionConfig,
   enabled: boolean,
 ): Promise<void> {
-  return invoke("add_extension", {
-    name,
-    extensionConfig,
-    enabled,
-  });
+  const configKey = nameToKey(name);
+  return updateExtensionsConfig((extensions) => ({
+    ...extensions,
+    [configKey]: {
+      ...extensionConfig,
+      enabled,
+      name,
+    },
+  }));
 }
 
 export async function removeExtension(configKey: string): Promise<void> {
-  return invoke("remove_extension", { configKey });
+  return updateExtensionsConfig((extensions) => {
+    const next = { ...extensions };
+    delete next[configKey];
+    return next;
+  });
 }
 
 export async function toggleExtension(
   configKey: string,
   enabled: boolean,
 ): Promise<void> {
-  return invoke("toggle_extension", { configKey, enabled });
+  return updateExtensionsConfig((extensions) => {
+    const entry = extensions[configKey];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Extension '${configKey}' not found`);
+    }
+    return {
+      ...extensions,
+      [configKey]: {
+        ...entry,
+        enabled,
+      },
+    };
+  });
 }
