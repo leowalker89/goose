@@ -2814,6 +2814,11 @@ impl GooseAcpAgent {
                 }
                 Ok(_) => {}
                 Err(e) => {
+                    let mut sessions = self.sessions.lock().await;
+                    if let Some(session) = sessions.get_mut(&thread_id) {
+                        session.cancel_token = None;
+                        flush_tool_chain_summary(cx, &args.session_id, session)?;
+                    }
                     return Err(sacp::Error::internal_error()
                         .data(format!("Error in agent response stream: {}", e)));
                 }
