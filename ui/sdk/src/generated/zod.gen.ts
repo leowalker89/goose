@@ -704,7 +704,7 @@ export const zDeleteSourceRequest = z.object({
 });
 
 /**
- * Export a source at an absolute path as a portable JSON payload.
+ * Export a source at an absolute path as its canonical Markdown payload.
  */
 export const zExportSourceRequest = z.object({
     type: zSourceType,
@@ -717,7 +717,7 @@ export const zExportSourceResponse = z.object({
 });
 
 /**
- * Import a source from a JSON export payload produced by `_goose/sources/export`.
+ * Import a source from a canonical Markdown payload produced by `_goose/sources/export`.
  * The imported source is written into the explicit target scope; on name
  * collisions a `-imported` suffix is appended.
  */

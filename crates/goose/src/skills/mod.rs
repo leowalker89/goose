@@ -154,21 +154,6 @@ pub(crate) fn is_global_skill_dir(path: &Path) -> bool {
     })
 }
 
-pub(crate) fn infer_skill_name(dir: &Path) -> String {
-    let md = dir.join("SKILL.md");
-    if let Ok(raw) = std::fs::read_to_string(&md) {
-        if let Ok(Some((meta, _))) = parse_frontmatter::<SkillFrontmatter>(&raw) {
-            if let Some(n) = meta.name.filter(|n| !n.is_empty()) {
-                return n;
-            }
-        }
-    }
-    dir.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unnamed")
-        .to_string()
-}
-
 pub(crate) fn build_skill_md(name: &str, description: &str, content: &str) -> String {
     let safe_desc = description.replace('\'', "''");
     let mut md = format!("---\nname: {}\ndescription: '{}'\n---\n", name, safe_desc);
@@ -178,16 +163,6 @@ pub(crate) fn build_skill_md(name: &str, description: &str, content: &str) -> St
         md.push('\n');
     }
     md
-}
-
-pub(crate) fn parse_skill_frontmatter(raw: &str) -> (String, String) {
-    if !raw.trim_start().starts_with("---") {
-        return (String::new(), raw.to_string());
-    }
-    match parse_frontmatter::<SkillFrontmatter>(raw) {
-        Ok(Some((meta, body))) => (meta.description, body),
-        _ => (String::new(), raw.to_string()),
-    }
 }
 
 /// Every directory the agent reads skills from, paired with whether each is a

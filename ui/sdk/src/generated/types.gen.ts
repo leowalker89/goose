@@ -728,7 +728,7 @@ export type DeleteSourceRequest = {
 };
 
 /**
- * Export a source at an absolute path as a portable JSON payload.
+ * Export a source at an absolute path as its canonical Markdown payload.
  */
 export type ExportSourceRequest = {
     type: SourceType;
@@ -736,12 +736,15 @@ export type ExportSourceRequest = {
 };
 
 export type ExportSourceResponse = {
+    /**
+     * Canonical source contents. The field remains `json` for wire compatibility.
+     */
     json: string;
     filename: string;
 };
 
 /**
- * Import a source from a JSON export payload produced by `_goose/sources/export`.
+ * Import a source from a canonical Markdown payload produced by `_goose/sources/export`.
  * The imported source is written into the explicit target scope; on name
  * collisions a `-imported` suffix is appended.
  */

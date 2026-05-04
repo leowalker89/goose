@@ -1715,7 +1715,7 @@
         "type",
         "path"
       ],
-      "description": "Export a source at an absolute path as a portable JSON payload.",
+      "description": "Export a source at an absolute path as its canonical Markdown payload.",
       "x-side": "agent",
       "x-method": "_goose/sources/export"
     },
@@ -1723,7 +1723,8 @@
       "type": "object",
       "properties": {
         "json": {
-          "type": "string"
+          "type": "string",
+          "description": "Canonical source contents. The field remains `json` for wire compatibility."
         },
         "filename": {
           "type": "string"
@@ -1756,7 +1757,7 @@
         "data",
         "global"
       ],
-      "description": "Import a source from a JSON export payload produced by `_goose/sources/export`.\nThe imported source is written into the explicit target scope; on name\ncollisions a `-imported` suffix is appended.",
+      "description": "Import a source from a canonical Markdown payload produced by `_goose/sources/export`.\nThe imported source is written into the explicit target scope; on name\ncollisions a `-imported` suffix is appended.",
       "x-side": "agent",
       "x-method": "_goose/sources/import"
     },

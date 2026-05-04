@@ -25,18 +25,6 @@ test.describe("Agents view", () => {
     await expect(page.getByLabel("Agent: Code Reviewer")).toBeVisible();
   });
 
-  test("shows Built-in badge on built-in agents", async ({
-    tauriMocked: page,
-  }) => {
-    await navigateToAgents(page);
-
-    const soloCard = page.getByLabel("Agent: Solo");
-    await expect(soloCard.getByText("Built-in")).toBeVisible();
-
-    const reviewerCard = page.getByLabel("Agent: Code Reviewer");
-    await expect(reviewerCard.getByText("Built-in")).not.toBeVisible();
-  });
-
   test("shows create new agent button", async ({ tauriMocked: page }) => {
     await navigateToAgents(page);
     await expect(page.getByLabel("Create new agent")).toBeVisible();
@@ -119,43 +107,30 @@ test.describe("Agents view", () => {
     await navigateToAgents(page);
     await page.getByLabel("Agent: Code Reviewer").click();
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
     await expect(
-      dialog.locator("[data-slot='dialog-title']").filter({
-        hasText: "Code Reviewer",
-      }),
+      page.getByRole("button", { name: "Back to agents" }),
     ).toBeVisible();
-    await expect(dialog.getByText(/^Provider$/)).toBeVisible();
-    await expect(dialog.getByText("claude-sonnet-4-20250514")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Edit" })).toBeVisible();
+    await expect(
+      page.locator("h1", { hasText: "Code Reviewer" }),
+    ).toBeVisible();
+    await expect(page.getByText(/^Provider$/)).toBeVisible();
+    await expect(page.getByText("claude-sonnet-4-20250514")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Share" })).toBeEnabled();
   });
 
-  test("built-in agent opens read-only details with Duplicate button", async ({
+  test("seeded agent opens editable details with duplicate action", async ({
     tauriMocked: page,
   }) => {
     await navigateToAgents(page);
     await page.getByLabel("Agent: Solo").click();
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    await expect(page.locator("h1", { hasText: "Solo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+    await page.getByRole("button", { name: "More" }).click();
     await expect(
-      dialog.locator("[data-slot='dialog-title']").filter({
-        hasText: "Solo",
-      }),
+      page.getByRole("menuitem", { name: "Duplicate" }),
     ).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: /Duplicate/ }),
-    ).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Edit" }),
-    ).not.toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Create" }),
-    ).not.toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Save Changes" }),
-    ).not.toBeVisible();
   });
 
   test("custom agent card dropdown menu shows correct items", async ({
@@ -169,14 +144,14 @@ test.describe("Agents view", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Share" })).toBeVisible();
     await expect(
       menu.getByRole("menuitem", { name: "Duplicate" }),
     ).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Export" })).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeVisible();
   });
 
-  test("built-in agent dropdown menu does not show Edit or Delete", async ({
+  test("seeded agent dropdown menu shows editable actions", async ({
     tauriMocked: page,
   }) => {
     await navigateToAgents(page);
@@ -186,16 +161,12 @@ test.describe("Agents view", () => {
 
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
-    await expect(
-      menu.getByRole("menuitem", { name: "Edit" }),
-    ).not.toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Share" })).toBeVisible();
     await expect(
       menu.getByRole("menuitem", { name: "Duplicate" }),
     ).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Export" })).toBeVisible();
-    await expect(
-      menu.getByRole("menuitem", { name: "Delete" }),
-    ).not.toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeVisible();
   });
 
   test("Delete triggers confirmation dialog", async ({ tauriMocked: page }) => {
@@ -242,13 +213,13 @@ test.describe("Agents view", () => {
 
   test("search filters agents", async ({ tauriMocked: page }) => {
     await navigateToAgents(page);
-    await page.getByPlaceholder("Search agents...").fill("Solo");
+    await page.getByPlaceholder("Search agents").fill("Solo");
 
     await expect(page.getByLabel("Agent: Solo")).toBeVisible();
     await expect(page.getByLabel("Agent: Scout")).not.toBeVisible();
     await expect(page.getByLabel("Agent: Code Reviewer")).not.toBeVisible();
 
-    await page.getByPlaceholder("Search agents...").clear();
+    await page.getByPlaceholder("Search agents").clear();
     await expect(page.getByLabel("Agent: Solo")).toBeVisible();
     await expect(page.getByLabel("Agent: Scout")).toBeVisible();
     await expect(page.getByLabel("Agent: Code Reviewer")).toBeVisible();
@@ -262,7 +233,10 @@ test.describe("Agents view", () => {
     });
     await navigateToAgents(page);
 
-    await expect(page.getByLabel("Create new agent")).toBeVisible();
+    await expect(page.getByText("No agents yet")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "New Agent", exact: true }).nth(1),
+    ).toBeVisible();
     await expect(page.getByLabel(/^Agent: /)).not.toBeVisible();
   });
 });

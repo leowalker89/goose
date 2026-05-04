@@ -4,7 +4,7 @@
  * These objects conform to the TypeScript interfaces used by the app:
  *
  * Persona (from src/shared/types/agents.ts):
- *   { id, displayName, avatar?, systemPrompt, provider?, model?, isBuiltin, isFromDisk?, createdAt, updatedAt }
+ *   { id, displayName, avatar?, systemPrompt, provider?, model?, isBuiltin, isFromDisk?, sourcePath?, createdAt, updatedAt }
  *
  * SkillInfo (from src/features/skills/api/skills.ts):
  *   { name, description, instructions, path }
@@ -18,6 +18,7 @@ export const MOCK_PERSONAS = [
     displayName: "Solo",
     systemPrompt: "You are a general-purpose assistant.",
     isBuiltin: true,
+    sourcePath: "/tmp/home/.agents/agents/solo.md",
     createdAt: now,
     updatedAt: now,
   },
@@ -26,6 +27,7 @@ export const MOCK_PERSONAS = [
     displayName: "Scout",
     systemPrompt: "You are a research assistant that finds information.",
     isBuiltin: true,
+    sourcePath: "/tmp/home/.agents/agents/scout.md",
     createdAt: now,
     updatedAt: now,
   },
@@ -36,6 +38,7 @@ export const MOCK_PERSONAS = [
     provider: "claude",
     model: "claude-sonnet-4-20250514",
     isBuiltin: false,
+    sourcePath: "/tmp/home/.agents/agents/code-reviewer.md",
     createdAt: now,
     updatedAt: now,
   },
