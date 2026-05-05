@@ -415,6 +415,40 @@ fn refresh_plan_to_response(refresh_plan: RefreshPlan) -> RefreshProviderInvento
 }
 
 impl GooseAcpAgent {
+    async fn active_session_uses_provider(&self, provider_id: &str) -> Result<bool, sacp::Error> {
+        let active_sessions = {
+            let sessions = self.sessions.lock().await;
+            sessions
+                .iter()
+                .map(|(thread_id, session)| {
+                    (thread_id.clone(), session.internal_session_id.clone())
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (thread_id, internal_session_id) in active_sessions {
+            let session = self
+                .session_manager
+                .get_session(&internal_session_id, false)
+                .await
+                .internal_err_ctx("Failed to check active session provider")?;
+            if session.provider_name.as_deref() == Some(provider_id) {
+                return Ok(true);
+            }
+
+            let thread = self
+                .thread_manager
+                .get_thread(&thread_id)
+                .await
+                .internal_err_ctx("Failed to check active thread provider")?;
+            if thread.metadata.provider_id.as_deref() == Some(provider_id) {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     pub(super) async fn on_list_providers(
         &self,
         req: ListProvidersRequest,
@@ -607,6 +641,7 @@ impl GooseAcpAgent {
             .ok()
             .as_deref()
             == Some(req.provider_id.as_str())
+            || self.active_session_uses_provider(&req.provider_id).await?
         {
             return Err(sacp::Error::invalid_params().data(format!(
                 "Cannot delete active provider: {}",

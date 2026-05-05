@@ -18,7 +18,7 @@ use tracing::warn;
 pub fn parse_frontmatter<T: for<'de> Deserialize<'de>>(
     content: &str,
 ) -> Result<Option<(T, String)>, serde_yaml::Error> {
-    let content = content.trim_start();
+    let content = trim_frontmatter_start(content);
     let mut lines = content.lines();
     if !lines.next().is_some_and(is_frontmatter_delimiter) {
         return Ok(None);
@@ -36,6 +36,10 @@ pub fn parse_frontmatter<T: for<'de> Deserialize<'de>>(
     }
 
     Ok(None)
+}
+
+fn trim_frontmatter_start(content: &str) -> &str {
+    content.trim_start_matches(|ch: char| ch.is_whitespace() || ch == '\u{feff}')
 }
 
 fn is_frontmatter_delimiter(line: &str) -> bool {
@@ -144,13 +148,11 @@ pub(crate) struct AgentFrontmatter {
 }
 
 pub(crate) fn parse_agent_markdown(raw: &str) -> Result<Option<AgentFrontmatterAndBody>, Error> {
-    if !raw.trim_start().starts_with("---") {
-        return Ok(None);
-    }
-
-    let (mut frontmatter, body): (Mapping, String) = parse_frontmatter::<Mapping>(raw)
+    let Some((mut frontmatter, body)) = parse_frontmatter::<Mapping>(raw)
         .map_err(|e| Error::invalid_params().data(format!("Invalid agent frontmatter: {e}")))?
-        .ok_or_else(|| Error::invalid_params().data("Agent file is missing frontmatter"))?;
+    else {
+        return Ok(None);
+    };
 
     let name = remove_string_key(&mut frontmatter, "name").unwrap_or_default();
     if name.trim().is_empty() {
@@ -475,7 +477,10 @@ fn scan_agents_from_dir(
     let mut sources = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
             continue;
         }
 
@@ -805,6 +810,16 @@ mod tests {
 
         assert_eq!(parsed.frontmatter.name, "Windows Agent");
         assert_eq!(parsed.frontmatter.description.as_deref(), Some("crlf"));
+        assert_eq!(parsed.body, "body");
+    }
+
+    #[test]
+    fn parse_frontmatter_accepts_bom_prefixed_delimiter() {
+        let raw = "\u{feff}---\nname: Bom Agent\ndescription: bom\n---\nbody\n";
+        let parsed = parse_agent_markdown(raw).unwrap().unwrap();
+
+        assert_eq!(parsed.frontmatter.name, "Bom Agent");
+        assert_eq!(parsed.frontmatter.description.as_deref(), Some("bom"));
         assert_eq!(parsed.body, "body");
     }
 
@@ -1233,6 +1248,28 @@ mod tests {
         assert!(format!("{:?}", err).contains("not found"));
         let listed = list_sources(Some(SourceType::Agent), Some(project_dir)).unwrap();
         assert!(!listed.iter().any(|source| source.name == "Nested Agent"));
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let outside_agent = project.path().join("outside-agent.md");
+            std::fs::write(
+                &outside_agent,
+                "---\nname: Symlink Agent\ndescription: linked\n---\nlinked body\n",
+            )
+            .unwrap();
+            let symlinked_agent = project
+                .path()
+                .join(".agents")
+                .join("agents")
+                .join("symlink-agent.md");
+            std::fs::create_dir_all(symlinked_agent.parent().unwrap()).unwrap();
+            symlink(&outside_agent, &symlinked_agent).unwrap();
+
+            let listed = list_sources(Some(SourceType::Agent), Some(project_dir)).unwrap();
+            assert!(!listed.iter().any(|source| source.name == "Symlink Agent"));
+        }
 
         let missing = project
             .path()
