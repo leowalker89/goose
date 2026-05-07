@@ -1,9 +1,9 @@
-use crate::config::paths::Paths;
 use crate::config::GooseMode;
-use crate::conversation::message::Message;
+use crate::config::paths::Paths;
 use crate::conversation::Conversation;
+use crate::conversation::message::Message;
 use crate::model::ModelConfig;
-use crate::providers::base::{Provider, MSG_COUNT_FOR_SESSION_NAME_GENERATION};
+use crate::providers::base::{MSG_COUNT_FOR_SESSION_NAME_GENERATION, Provider};
 use crate::recipe::Recipe;
 use crate::session::extension_data::ExtensionData;
 use anyhow::Result;
@@ -19,7 +19,7 @@ use std::sync::{Arc, LazyLock};
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
-pub const CURRENT_SCHEMA_VERSION: i32 = 11;
+pub const CURRENT_SCHEMA_VERSION: i32 = 12;
 pub const SESSIONS_FOLDER: &str = "sessions";
 pub const DB_NAME: &str = "sessions.db";
 
@@ -590,6 +590,9 @@ impl SessionStorage {
                     if let Err(e) = Self::import_legacy(&self.pool, &self.session_dir).await {
                         warn!("Failed to import some legacy sessions: {}", e);
                     }
+                    if let Err(e) = Self::backfill_legacy_sessions_to_threads(&self.pool).await {
+                        warn!("Failed to backfill legacy sessions to threads: {}", e);
+                    }
                 }
                 Ok::<(), anyhow::Error>(())
             })
@@ -728,6 +731,65 @@ impl SessionStorage {
             .await?;
 
         crate::providers::inventory::create_tables(pool).await?;
+
+        Ok(())
+    }
+
+    async fn backfill_legacy_sessions_to_threads(pool: &Pool<Sqlite>) -> Result<()> {
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+        Self::backfill_legacy_sessions_to_threads_in_tx(&mut tx).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn backfill_legacy_sessions_to_threads_in_tx(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO threads (id, name, user_set_name, working_dir, created_at, updated_at, metadata_json)
+            SELECT s.id,
+                   CASE WHEN s.name = '' OR s.name IS NULL THEN 'New Chat' ELSE s.name END,
+                   s.user_set_name,
+                   s.working_dir,
+                   s.created_at,
+                   s.updated_at,
+                   '{}'
+            FROM sessions s
+            WHERE s.session_type IN ('user', 'acp')
+              AND s.thread_id IS NULL
+              AND EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
+            "#,
+        )
+        .execute(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO thread_messages (thread_id, session_id, message_id, role, content_json, created_timestamp, metadata_json)
+            SELECT s.id, m.session_id, m.message_id, m.role, m.content_json, m.created_timestamp, COALESCE(m.metadata_json, '{}')
+            FROM messages m
+            JOIN sessions s ON s.id = m.session_id
+            WHERE s.session_type IN ('user', 'acp')
+              AND s.thread_id IS NULL
+              AND EXISTS (SELECT 1 FROM messages m2 WHERE m2.session_id = s.id)
+            ORDER BY m.created_timestamp, m.id
+            "#,
+        )
+        .execute(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE sessions
+            SET thread_id = id
+            WHERE session_type IN ('user', 'acp')
+              AND thread_id IS NULL
+              AND EXISTS (SELECT 1 FROM messages m WHERE m.session_id = sessions.id)
+            "#,
+        )
+        .execute(&mut **tx)
+        .await?;
 
         Ok(())
     }
@@ -1074,6 +1136,9 @@ impl SessionStorage {
             }
             11 => {
                 crate::providers::inventory::create_tables_in_tx(tx).await?;
+            }
+            12 => {
+                Self::backfill_legacy_sessions_to_threads_in_tx(tx).await?;
             }
             _ => {
                 anyhow::bail!("Unknown migration version: {}", version);
@@ -2105,6 +2170,241 @@ mod tests {
 
         let reloaded = sm.get_session(&session.id, false).await.unwrap();
         assert_eq!(reloaded.goose_mode, GooseMode::default());
+    }
+
+    #[tokio::test]
+    async fn test_legacy_session_backfill_creates_threads() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join(SESSIONS_FOLDER).join(DB_NAME);
+
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+
+        let pool = SqlitePoolOptions::new()
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true),
+            )
+            .await
+            .unwrap();
+
+        SessionStorage::create_schema(&pool).await.unwrap();
+
+        // Demote schema to v11 so migration v12 runs
+        sqlx::query("UPDATE schema_version SET version = 11")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Insert a user session with messages (should be backfilled)
+        sqlx::query(
+            "INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("user_with_msgs")
+        .bind("My CLI Session")
+        .bind(true)
+        .bind("user")
+        .bind("/home/user/project")
+        .bind("{}")
+        .bind("auto")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind("msg_1")
+        .bind("user_with_msgs")
+        .bind("user")
+        .bind(r#"[{"type":"text","text":"hello"}]"#)
+        .bind(1000i64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind("msg_2")
+        .bind("user_with_msgs")
+        .bind("assistant")
+        .bind(r#"[{"type":"text","text":"hi there"}]"#)
+        .bind(2000i64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert an ACP session with messages (should also be backfilled)
+        sqlx::query(
+            "INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("acp_with_msgs")
+        .bind("ACP Session")
+        .bind(false)
+        .bind("acp")
+        .bind("/tmp")
+        .bind("{}")
+        .bind("auto")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind("msg_acp_1")
+        .bind("acp_with_msgs")
+        .bind("user")
+        .bind(r#"[{"type":"text","text":"acp hello"}]"#)
+        .bind(3000i64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a scheduled session with messages (should NOT be backfilled)
+        sqlx::query(
+            "INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("scheduled_session")
+        .bind("Scheduled")
+        .bind(false)
+        .bind("scheduled")
+        .bind("/tmp")
+        .bind("{}")
+        .bind("auto")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind("msg_sched_1")
+        .bind("scheduled_session")
+        .bind("user")
+        .bind(r#"[{"type":"text","text":"scheduled"}]"#)
+        .bind(4000i64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a user session with NO messages (should NOT be backfilled)
+        sqlx::query(
+            "INSERT INTO sessions (id, name, user_set_name, session_type, working_dir, extension_data, goose_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("user_no_msgs")
+        .bind("Empty Session")
+        .bind(false)
+        .bind("user")
+        .bind("/tmp")
+        .bind("{}")
+        .bind("auto")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        pool.close().await;
+
+        // Reopen via SessionManager which triggers migration
+        let sm = SessionManager::new(temp_dir.path().to_path_buf());
+        sm.storage().pool().await.unwrap();
+
+        // Verify user session was backfilled
+        let user_session = sm
+            .storage()
+            .get_session("user_with_msgs", false)
+            .await
+            .unwrap();
+        assert_eq!(
+            user_session.thread_id.as_deref(),
+            Some("user_with_msgs"),
+            "user session should have thread_id set"
+        );
+
+        let thread_exists =
+            sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM threads WHERE id = ?)")
+                .bind("user_with_msgs")
+                .fetch_one(sm.storage().pool().await.unwrap())
+                .await
+                .unwrap();
+        assert!(thread_exists, "thread row should exist for user session");
+
+        let thread_name = sqlx::query_scalar::<_, String>("SELECT name FROM threads WHERE id = ?")
+            .bind("user_with_msgs")
+            .fetch_one(sm.storage().pool().await.unwrap())
+            .await
+            .unwrap();
+        assert_eq!(thread_name, "My CLI Session");
+
+        let thread_msg_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM thread_messages WHERE thread_id = ?",
+        )
+        .bind("user_with_msgs")
+        .fetch_one(sm.storage().pool().await.unwrap())
+        .await
+        .unwrap();
+        assert_eq!(thread_msg_count, 2, "should have copied 2 messages");
+
+        // Verify ACP session was backfilled
+        let acp_session = sm
+            .storage()
+            .get_session("acp_with_msgs", false)
+            .await
+            .unwrap();
+        assert_eq!(acp_session.thread_id.as_deref(), Some("acp_with_msgs"));
+
+        let acp_thread_msg_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM thread_messages WHERE thread_id = ?",
+        )
+        .bind("acp_with_msgs")
+        .fetch_one(sm.storage().pool().await.unwrap())
+        .await
+        .unwrap();
+        assert_eq!(acp_thread_msg_count, 1);
+
+        // Verify scheduled session was NOT backfilled
+        let sched_session = sm
+            .storage()
+            .get_session("scheduled_session", false)
+            .await
+            .unwrap();
+        assert!(
+            sched_session.thread_id.is_none(),
+            "scheduled session should not have thread_id"
+        );
+
+        let sched_thread_exists =
+            sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM threads WHERE id = ?)")
+                .bind("scheduled_session")
+                .fetch_one(sm.storage().pool().await.unwrap())
+                .await
+                .unwrap();
+        assert!(
+            !sched_thread_exists,
+            "no thread should exist for scheduled session"
+        );
+
+        // Verify empty user session was NOT backfilled
+        let empty_session = sm
+            .storage()
+            .get_session("user_no_msgs", false)
+            .await
+            .unwrap();
+        assert!(
+            empty_session.thread_id.is_none(),
+            "empty user session should not have thread_id"
+        );
     }
 
     #[tokio::test]
