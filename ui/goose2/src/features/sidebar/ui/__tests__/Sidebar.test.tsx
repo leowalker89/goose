@@ -61,12 +61,11 @@ describe("Sidebar", () => {
       />,
     );
 
-    expect(
-      screen.getByText("Create a Project and Start a New Chat"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    expect(screen.getByText("Chats")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "New project" }));
-    await user.click(screen.getByRole("button", { name: "New chat" }));
+    await user.click(screen.getByRole("button", { name: "Create a project" }));
+    await user.click(screen.getByRole("button", { name: "Start a chat" }));
 
     expect(onCreateProject).toHaveBeenCalledOnce();
     expect(onNewChat).toHaveBeenCalledOnce();

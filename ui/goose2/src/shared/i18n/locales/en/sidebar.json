@@ -11,7 +11,8 @@
     "optionsFor": "Options for {{label}}"
   },
   "empty": {
-    "noProjectsOrChats": "Create a Project and Start a New Chat"
+    "createProject": "Create a project",
+    "startChat": "Start a chat"
   },
   "navigation": {
     "agents": "Agents",
