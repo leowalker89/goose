@@ -37,6 +37,7 @@ use super::ollama::OLLAMA_HOST;
 use crate::conversation::message::{Message, MessageContent};
 use crate::conversation::Conversation;
 use crate::model::ModelConfig;
+use crate::providers::base::DEFAULT_PROVIDER_TIMEOUT_SECS;
 use crate::providers::formats::openai::create_request;
 use anyhow::Result;
 use futures::StreamExt;
@@ -605,7 +606,7 @@ impl LocalInterpreter {
 impl OllamaInterpreter {
     pub fn new() -> Result<Self, ProviderError> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(600))
+            .timeout(Duration::from_secs(DEFAULT_PROVIDER_TIMEOUT_SECS))
             .build()
             .expect("Failed to create HTTP client");
 

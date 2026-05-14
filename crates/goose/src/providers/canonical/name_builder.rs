@@ -39,7 +39,7 @@ fn is_meta_provider(provider: &str) -> bool {
     matches!(provider, "databricks" | "tetrate" | "bedrock" | "azure")
 }
 
-fn map_provider_name(provider: &str) -> &str {
+pub fn map_provider_name(provider: &str) -> &str {
     match provider {
         // Goose provider names that differ from models.dev names
         "xai" => "x-ai",
@@ -48,6 +48,7 @@ fn map_provider_name(provider: &str) -> &str {
         "gcp_vertex_ai" => "google-vertex",
         "gemini_oauth" => "google",
         "zhipu" => "zhipuai",
+        "novita" => "novita-ai",
         _ => provider,
     }
 }

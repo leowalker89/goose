@@ -90,10 +90,9 @@ impl TestReport {
     }
 }
 
-lazy_static::lazy_static! {
-    static ref TEST_REPORT: Arc<TestReport> = TestReport::new();
-    static ref ENV_LOCK: Mutex<()> = Mutex::new(());
-}
+static TEST_REPORT: std::sync::LazyLock<Arc<TestReport>> =
+    std::sync::LazyLock::new(TestReport::new);
+static ENV_LOCK: std::sync::LazyLock<Mutex<()>> = std::sync::LazyLock::new(|| Mutex::new(()));
 
 struct ProviderFixture {
     name: String,
@@ -334,6 +333,11 @@ impl ProviderFixture {
             Some(req) => req,
             None => return Ok(response1),
         };
+
+        // Provider already executed an externally-dispatched tool — don't redispatch.
+        if tool_req.is_externally_dispatched() {
+            return Ok(response1);
+        }
 
         let params = tool_req.tool_call.as_ref().unwrap().clone();
         let ctx = goose::agents::ToolCallContext::new(
@@ -883,7 +887,7 @@ async fn test_codex_provider() -> Result<()> {
         .await
 }
 
-// Requires: npm install -g @zed-industries/claude-agent-acp
+// Requires: npm install -g @agentclientprotocol/claude-agent-acp
 #[tokio::test]
 async fn test_claude_acp_provider() -> Result<()> {
     ProviderTestConfig::with_agentic_provider("claude-acp", ACP_CURRENT_MODEL, "claude-agent-acp")
