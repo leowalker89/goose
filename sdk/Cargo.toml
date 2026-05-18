@@ -1,0 +1,28 @@
+[package]
+name = "goose-uniffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Multi-language bindings (Python, Kotlin) for the Goose agent core via UniFFI"
+
+[lib]
+name = "goose_uniffi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "goose-uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+goose = { path = "../crates/goose" }
+uniffi = { version = "0.29", features = ["tokio", "cli"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
+futures = { workspace = true }
+anyhow = { workspace = true }
+thiserror = "2"
+async-trait = { workspace = true }
+rmcp = { workspace = true }
+serde_json = { workspace = true }

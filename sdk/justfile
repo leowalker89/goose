@@ -1,0 +1,66 @@
+set shell := ["bash", "-cu"]
+set working-directory := '..'
+
+lib_ext := if os() == "macos" { "dylib" } else if os() == "windows" { "dll" } else { "so" }
+lib_dir := "./target/debug"
+lib_path := lib_dir / "libgoose_uniffi." + lib_ext
+bindgen := "./target/debug/goose-uniffi-bindgen"
+gen_dir := "./sdk/generated"
+
+# ANSI helpers
+bold := '\033[1m'
+dim := '\033[2m'
+cyan := '\033[36m'
+reset := '\033[0m'
+
+default:
+    @just --list --justfile {{justfile()}}
+
+# ─── shared steps ────────────────────────────────────────────────
+
+_build:
+    @printf "{{dim}}┌─ building goose-uniffi (rust → cdylib){{reset}}\n"
+    @printf "{{dim}}│  cargo build -p goose-uniffi{{reset}}\n"
+    @cargo build -p goose-uniffi -q
+    @printf "{{dim}}└─ {{reset}}{{bold}}libgoose_uniffi.{{lib_ext}}{{reset}} {{dim}}ready{{reset}}\n\n"
+
+_generate lang: _build
+    @printf "{{dim}}┌─ generating {{lang}} bindings via uniffi-bindgen{{reset}}\n"
+    @printf "{{dim}}│  goose-uniffi-bindgen generate --language {{lang}}{{reset}}\n"
+    @{{bindgen}} generate --library {{lib_path}} --language {{lang}} --no-format --out-dir {{gen_dir}} 2>/dev/null
+    @printf "{{dim}}└─ bindings written to {{gen_dir}}{{reset}}\n\n"
+
+_header lang:
+    @printf "\n{{bold}}{{cyan}}━━━ goose-uniffi · {{lang}} demo ━━━{{reset}}\n"
+    @printf "{{dim}}prompt: \"ping apple.com\" · extension: developer (builtin){{reset}}\n\n"
+
+# ─── language demos ──────────────────────────────────────────────
+
+python: (_header "python") (_generate "python")
+    @printf "{{dim}}┌─ running python example{{reset}}\n"
+    @printf "{{dim}}│  python3 sdk/examples/ping_apple.py{{reset}}\n"
+    @printf "{{dim}}└──────────────────────────────────────{{reset}}\n\n"
+    @DYLD_LIBRARY_PATH={{lib_dir}} LD_LIBRARY_PATH={{lib_dir}} \
+        python3 sdk/examples/ping_apple.py
+
+kotlin: (_header "kotlin") (_generate "kotlin")
+    @if [ ! -f sdk/examples/jna.jar ]; then \
+        printf "{{dim}}┌─ downloading jna.jar{{reset}}\n"; \
+        curl -sSL -o sdk/examples/jna.jar \
+            https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar; \
+        printf "{{dim}}└─ jna.jar ready{{reset}}\n\n"; \
+    fi
+    @printf "{{dim}}┌─ compiling kotlin{{reset}}\n"
+    @printf "{{dim}}│  kotlinc PingApple.kt + generated bindings{{reset}}\n"
+    @kotlinc -cp sdk/examples/jna.jar -nowarn \
+        {{gen_dir}}/uniffi/goose_uniffi/goose_uniffi.kt \
+        sdk/examples/PingApple.kt \
+        -include-runtime -d sdk/examples/ping_apple.jar 2>/dev/null
+    @printf "{{dim}}└─ ping_apple.jar built{{reset}}\n\n"
+    @printf "{{dim}}┌─ running kotlin example{{reset}}\n"
+    @printf "{{dim}}│  java -cp ping_apple.jar examples.PingAppleKt{{reset}}\n"
+    @printf "{{dim}}└──────────────────────────────────────{{reset}}\n\n"
+    @java -Djna.library.path={{lib_dir}} \
+        --enable-native-access=ALL-UNNAMED \
+        -cp sdk/examples/ping_apple.jar:sdk/examples/jna.jar examples.PingAppleKt
+
