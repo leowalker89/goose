@@ -568,7 +568,7 @@ impl Agent {
         provider_name: &str,
     ) -> Option<f64> {
         let canonical =
-            crate::providers::canonical::maybe_get_canonical_model(provider_name, &usage.model)?;
+            goose_providers::canonical::maybe_get_canonical_model(provider_name, &usage.model)?;
 
         let input_price = canonical.cost.input?;
         let output_price = canonical.cost.output?;

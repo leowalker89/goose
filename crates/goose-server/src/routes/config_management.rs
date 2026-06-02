@@ -14,7 +14,6 @@ use goose::config::{Config, ConfigError};
 use goose::custom_requests::SourceType;
 use goose::model::ModelConfig;
 use goose::providers::base::{ModelInfo, ProviderMetadata, ProviderType};
-use goose::providers::canonical::maybe_get_canonical_model;
 use goose::providers::catalog::{
     get_provider_template, get_providers_by_format, ProviderCatalogEntry, ProviderFormat,
     ProviderTemplate,
@@ -25,6 +24,7 @@ use goose::{
     agents::execute_commands, agents::ExtensionConfig, config::permission::PermissionLevel,
     slash_commands::recipe_slash_command,
 };
+use goose_providers::canonical::maybe_get_canonical_model;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_yaml;

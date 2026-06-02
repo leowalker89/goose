@@ -222,12 +222,12 @@ impl ModelConfig {
         // to the name with reasoning-effort suffixes stripped (e.g.
         // "databricks-gpt-5.4-high" → "databricks-gpt-5.4").
         let canonical =
-            crate::providers::canonical::maybe_get_canonical_model(provider_name, &self.model_name)
+            goose_providers::canonical::maybe_get_canonical_model(provider_name, &self.model_name)
                 .or_else(|| {
                     let (base, _effort) =
                         crate::providers::utils::extract_reasoning_effort(&self.model_name);
                     if base != self.model_name {
-                        crate::providers::canonical::maybe_get_canonical_model(provider_name, &base)
+                        goose_providers::canonical::maybe_get_canonical_model(provider_name, &base)
                     } else {
                         None
                     }

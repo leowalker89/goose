@@ -49,6 +49,7 @@ rustls-tls = [
     "jsonwebtoken/aws_lc_rs",
     "oauth2/reqwest",
     "oauth2/rustls-tls",
+    "goose-providers/rustls-tls",
 ]
 native-tls = [
     "dep:pem",
@@ -62,6 +63,7 @@ native-tls = [
     "jsonwebtoken/rust_crypto",
     "oauth2/reqwest",
     "oauth2/native-tls",
+    "goose-providers/native-tls",
 ]
 system-keyring = ["dep:keyring"]
 portable-default = ["rustls-tls", "aws-providers", "telemetry", "otel"]
@@ -123,6 +125,7 @@ once_cell = { workspace = true }
 etcetera = { workspace = true }
 fs-err = { version = "3.1", default-features = false }
 goose-sdk = { path = "../goose-sdk", default-features = false }
+goose-providers = { path = "../goose-providers", default-features = false }
 rand = { workspace = true }
 utoipa = { workspace = true, features = ["chrono"] }
 tokio-cron-scheduler = { version = "0.15", default-features = false }
@@ -266,10 +269,6 @@ required-features = ["local-inference"]
 [[bin]]
 name = "analyze_cli"
 path = "src/bin/analyze_cli.rs"
-
-[[bin]]
-name = "build_canonical_models"
-path = "src/providers/canonical/build_canonical_models.rs"
 
 [[bin]]
 name = "generate-acp-schema"

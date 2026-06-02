@@ -4481,6 +4481,7 @@ dependencies = [
  "futures",
  "goose-acp-macros",
  "goose-mcp",
+ "goose-providers",
  "goose-sdk",
  "goose-test-support",
  "http 1.4.1",
@@ -4611,6 +4612,7 @@ dependencies = [
  "futures",
  "goose",
  "goose-mcp",
+ "goose-providers",
  "indicatif",
  "open",
  "rand 0.8.6",
@@ -4670,6 +4672,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "goose-providers"
+version = "1.37.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "regex",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "goose-sdk"
 version = "1.37.0"
 dependencies = [
@@ -4699,6 +4714,7 @@ dependencies = [
  "futures",
  "goose",
  "goose-mcp",
+ "goose-providers",
  "hex",
  "http 1.4.1",
  "openssl",

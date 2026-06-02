@@ -2,15 +2,16 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 // Patterns for normalizing version numbers and stripping suffixes
-static NORMALIZE_VERSION_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"-(\d)-(\d)(-|@|$)").unwrap());
+static NORMALIZE_VERSION_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"-([0-9])-([0-9])(-|@|$)").unwrap());
 
 static STRIP_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     vec![
         Regex::new(r"-latest$").unwrap(),
-        Regex::new(r"-\d{8}$").unwrap(),
-        Regex::new(r"@\d{8}$").unwrap(),
-        Regex::new(r"-\d{4}$").unwrap(),
-        Regex::new(r"-\d{4}-\d{2}-\d{2}$").unwrap(),
+        Regex::new(r"-[0-9]{8}$").unwrap(),
+        Regex::new(r"@[0-9]{8}$").unwrap(),
+        Regex::new(r"-[0-9]{4}$").unwrap(),
+        Regex::new(r"-[0-9]{4}-[0-9]{2}-[0-9]{2}$").unwrap(),
         Regex::new(r"-bedrock$").unwrap(),
     ]
 });

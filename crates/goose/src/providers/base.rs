@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 /// before giving up. Individual providers may override this via their own config key.
 pub const DEFAULT_PROVIDER_TIMEOUT_SECS: u64 = 600;
 
-use super::canonical::{map_to_canonical_model, CanonicalModelRegistry};
 use super::errors::ProviderError;
 use super::inventory::{default_inventory_identity, InventoryIdentityInput};
 use super::retry::RetryConfig;
@@ -20,6 +19,7 @@ use crate::conversation::Conversation;
 use crate::model::ModelConfig;
 use crate::permission::PermissionConfirmation;
 use crate::utils::safe_truncate;
+use goose_providers::canonical::{map_to_canonical_model, CanonicalModelRegistry, Modality};
 use rmcp::model::Tool;
 use utoipa::ToSchema;
 
@@ -985,11 +985,7 @@ pub trait Provider: Send + Sync {
                 let (provider, model_name) = canonical_id.split_once('/')?;
                 let canonical_model = registry.get(provider, model_name)?;
 
-                if !canonical_model
-                    .modalities
-                    .input
-                    .contains(&crate::providers::canonical::Modality::Text)
-                {
+                if !canonical_model.modalities.input.contains(&Modality::Text) {
                     return None;
                 }
 

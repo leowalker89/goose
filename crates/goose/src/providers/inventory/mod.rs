@@ -1,5 +1,4 @@
 use super::base::{ConfigKey, ModelInfo, ProviderType};
-use super::canonical::{map_provider_name, map_to_canonical_model, CanonicalModelRegistry};
 use super::catalog::ProviderSetupCategory;
 use crate::config::declarative_providers::{DeclarativeProviderConfig, ProviderEngine};
 use crate::config::Config;
@@ -7,6 +6,9 @@ use crate::session::session_manager::SessionStorage;
 use crate::utils::bytes_to_hex;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
+use goose_providers::canonical::{
+    map_provider_name, map_to_canonical_model, CanonicalModelRegistry,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Pool, Row, Sqlite, Transaction};
