@@ -3,7 +3,7 @@ use std::future::Future;
 pub struct Error;
 
 pub struct Model {
-    name: String,
+    pub name: String,
 }
 
 pub struct StreamingRequest {

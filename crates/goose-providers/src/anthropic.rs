@@ -1,9 +1,9 @@
 use crate::base::{Error, Provider, StreamingRequest, StreamingResponse};
 
-struct Anthropic;
+pub struct Anthropic;
 
 impl Provider for Anthropic {
-    async fn stream(req: StreamingRequest) -> Result<StreamingResponse, Error> {
+    async fn stream(_req: StreamingRequest) -> Result<StreamingResponse, Error> {
         todo!()
     }
 }

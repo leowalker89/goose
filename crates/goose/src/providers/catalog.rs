@@ -7,7 +7,8 @@ use super::{
     canonical::CanonicalModelRegistry,
 };
 
-const PROVIDER_METADATA_JSON: &str = include_str!("canonical/data/provider_metadata.json");
+const PROVIDER_METADATA_JSON: &str =
+    include_str!("../../../goose-providers/src/canonical/data/provider_metadata.json");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ProviderMetadataEntry {
