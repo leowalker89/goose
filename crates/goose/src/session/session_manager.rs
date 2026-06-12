@@ -572,7 +572,7 @@ pub(crate) fn role_to_string(role: &Role) -> &'static str {
     }
 }
 
-/// Build a bounded, single-line snippet from a message's real text content.
+/// Build a bounded, single-line snippet from a user-visible message's real text content.
 ///
 /// `Message::as_concat_text` yields only `Text` parts, so tool-request,
 /// tool-response, thinking, and image-only messages collapse to an empty
@@ -580,6 +580,10 @@ pub(crate) fn role_to_string(role: &Role) -> &'static str {
 /// single spaces, and the result includes at most `max_chars` characters of
 /// content; if truncated, a trailing `…` is appended so it can be rendered verbatim by clients.
 fn message_snippet(message: &Message, max_chars: usize) -> Option<String> {
+    if !message.metadata.user_visible {
+        return None;
+    }
+
     let text = message.as_concat_text();
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if normalized.is_empty() {
@@ -2139,7 +2143,7 @@ fn merge_tool_meta(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation::message::{Message, MessageContent};
+    use crate::conversation::message::{Message, MessageContent, MessageMetadata};
     use tempfile::TempDir;
     use test_case::test_case;
 
@@ -3303,6 +3307,11 @@ mod tests {
 
         let thinking = Message::assistant().with_thinking("internal reasoning", "sig");
         assert_eq!(message_snippet(&thinking, 20), None);
+
+        let agent_only = Message::assistant()
+            .with_text("hidden summary")
+            .with_metadata(MessageMetadata::agent_only());
+        assert_eq!(message_snippet(&agent_only, 20), None);
     }
 
     #[tokio::test]
@@ -3334,6 +3343,14 @@ mod tests {
         sm.add_message(&id, &Message::user().with_text("real text message"))
             .await
             .unwrap();
+        sm.add_message(
+            &id,
+            &Message::assistant()
+                .with_text("hidden context summary")
+                .with_metadata(MessageMetadata::agent_only()),
+        )
+        .await
+        .unwrap();
         sm.add_message(
             &id,
             &Message::assistant().with_tool_request("t1", Ok(CallToolRequestParams::new("shell"))),
@@ -3375,6 +3392,9 @@ mod tests {
             Message::user().with_text("first user prompt"),
             Message::assistant().with_text("assistant reply here"),
             Message::assistant().with_tool_request("t1", Ok(CallToolRequestParams::new("shell"))),
+            Message::assistant()
+                .with_text("hidden compacted summary")
+                .with_metadata(MessageMetadata::agent_only()),
         ]);
         sm.replace_conversation(&id, &conversation).await.unwrap();
 
@@ -3401,9 +3421,16 @@ mod tests {
             Message::assistant().with_text("latest text to remove"),
             3_000,
         );
+        let hidden = message_at(
+            Message::assistant()
+                .with_text("hidden compacted summary")
+                .with_metadata(MessageMetadata::agent_only()),
+            2_500,
+        );
 
         sm.add_message(&id, &previous).await.unwrap();
         sm.add_message(&id, &tool).await.unwrap();
+        sm.add_message(&id, &hidden).await.unwrap();
         sm.add_message(&id, &latest).await.unwrap();
 
         assert_eq!(
