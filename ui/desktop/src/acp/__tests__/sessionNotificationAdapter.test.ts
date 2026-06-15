@@ -247,6 +247,35 @@ describe('createAcpSessionNotificationAdapter', () => {
           },
         });
       });
+
+      it('uses failed tool response text content when raw output is absent', () => {
+        const adapter = createAcpSessionNotificationAdapter();
+
+        const failedToolStateChanges = adapter.apply(
+          acpUpdate({
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'tool-1',
+            status: 'failed',
+            title: 'Read file',
+            content: [
+              {
+                type: 'content',
+                content: { type: 'text', text: 'file not found' },
+              },
+            ],
+          })
+        );
+        const messages = expectOnlyMessagesChange(failedToolStateChanges);
+
+        expect(firstContent(messages[0])).toMatchObject({
+          type: 'toolResponse',
+          id: 'tool-1',
+          toolResult: {
+            status: 'error',
+            error: 'file not found',
+          },
+        });
+      });
     });
   });
 

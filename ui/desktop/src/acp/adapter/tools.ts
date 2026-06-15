@@ -277,8 +277,16 @@ function apiResourceContentsFromAcpResource(
 }
 
 function toolError(update: ToolCallUpdate): string {
-  if (typeof update.rawOutput === 'string') {
+  if (typeof update.rawOutput === 'string' && update.rawOutput.trim()) {
     return update.rawOutput;
+  }
+
+  const contentText = toolResultContent(update)
+    .flatMap((content) => (content.type === 'text' ? [content.text] : []))
+    .filter((text) => text.trim().length > 0)
+    .join('\n');
+  if (contentText) {
+    return contentText;
   }
 
   return update.title ?? 'Tool call failed';
