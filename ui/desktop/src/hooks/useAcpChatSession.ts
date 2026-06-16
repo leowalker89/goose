@@ -228,6 +228,10 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+function isClearCommand(message: string): boolean {
+  return message.trim() === '/clear';
+}
+
 function createAcpCreditsExhaustedMessage(error: AcpCreditsExhaustedError): Message {
   return {
     id: uuidv7(),
@@ -967,6 +971,7 @@ export function useAcpChatSession({
 
       const hasExistingMessages = currentState.messages.length > 0;
       const hasNewMessage = userMessage.trim().length > 0 || images.length > 0;
+      const clearsConversation = hasNewMessage && isClearCommand(userMessage);
 
       if (!hasNewMessage && !hasExistingMessages) {
         return;
@@ -1022,11 +1027,16 @@ export function useAcpChatSession({
       const newMessage = hasNewMessage
         ? createUserMessage(userMessage, images)
         : currentState.messages[currentState.messages.length - 1];
-      const currentMessages = hasNewMessage
-        ? [...currentState.messages, newMessage]
-        : [...currentState.messages];
+      const currentMessages = clearsConversation
+        ? []
+        : hasNewMessage
+          ? [...currentState.messages, newMessage]
+          : [...currentState.messages];
 
-      if (hasNewMessage) {
+      if (clearsConversation) {
+        acpAdapterRef.current = createAcpSessionNotificationAdapter([]);
+        dispatch({ type: 'SET_MESSAGES', payload: [] });
+      } else if (hasNewMessage) {
         dispatch({ type: 'SET_MESSAGES', payload: currentMessages });
       }
 
