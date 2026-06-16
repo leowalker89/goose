@@ -247,6 +247,33 @@ fn build_download_url(repo_id: &str, filename: &str) -> String {
     format!("{}/{}/resolve/main/{}", HF_DOWNLOAD_BASE, repo_id, filename)
 }
 
+/// Whether a remote-supplied filename is a safe relative path to join onto a
+/// local download directory. Rejects absolute paths, Windows drive prefixes,
+/// and any `..` traversal component. The HuggingFace API mirrors git tree
+/// paths (which cannot contain these), but we never trust the value as a path
+/// without checking it ourselves.
+fn is_safe_relative_path(filename: &str) -> bool {
+    use std::path::{Component, Path};
+
+    if filename.is_empty() {
+        return false;
+    }
+
+    let normalized = filename.replace('\\', "/");
+    Path::new(&normalized)
+        .components()
+        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+}
+
+/// Drop siblings whose filenames are not safe relative paths so a malformed or
+/// malicious API response can never escape the download directory.
+fn sanitize_siblings(siblings: Vec<HfApiSibling>) -> Vec<HfApiSibling> {
+    siblings
+        .into_iter()
+        .filter(|s| is_safe_relative_path(&s.rfilename))
+        .collect()
+}
+
 pub fn hf_authorization_header(token: Option<&str>) -> Option<String> {
     token
         .filter(|token| !token.is_empty())
@@ -447,7 +474,7 @@ pub async fn search_gguf_models(query: &str, limit: usize) -> Result<Vec<HfModel
         .into_iter()
         .filter_map(|m| {
             let repo_id = m.id?;
-            let siblings = m.siblings.unwrap_or_default();
+            let siblings = sanitize_siblings(m.siblings.unwrap_or_default());
 
             // The search endpoint may not include `siblings`; parse whatever
             // is available. Files are fetched on-demand via `get_repo_gguf_variants`.
@@ -508,7 +535,7 @@ pub async fn get_repo_gguf_variants(repo_id: &str) -> Result<Vec<HfQuantVariant>
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
 
     Ok(group_into_variants(repo_id, siblings))
 }
@@ -533,7 +560,7 @@ pub async fn get_repo_gguf_files(repo_id: &str) -> Result<Vec<HfGgufFile>> {
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
 
     let stem = model_stem_from_repo(repo_id);
 
@@ -594,7 +621,7 @@ pub async fn resolve_model_spec_full(spec: &str) -> Result<(String, ResolvedMode
     }
 
     let model: HfApiModel = response.json().await?;
-    let siblings = model.siblings.unwrap_or_default();
+    let siblings = sanitize_siblings(model.siblings.unwrap_or_default());
     let stem = model_stem_from_repo(&repo_id);
 
     // Collect all GGUF files matching the quantization
@@ -751,6 +778,49 @@ pub fn recommend_variant(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_safe_relative_path() {
+        assert!(is_safe_relative_path("model-Q4_K_M.gguf"));
+        assert!(is_safe_relative_path("subdir/model-Q4_K_M.gguf"));
+        assert!(is_safe_relative_path("./model.gguf"));
+
+        assert!(!is_safe_relative_path(""));
+        assert!(!is_safe_relative_path("../model.gguf"));
+        assert!(!is_safe_relative_path("../../etc/cron.d/x.gguf"));
+        assert!(!is_safe_relative_path("subdir/../../escape.gguf"));
+        assert!(!is_safe_relative_path("/etc/cron.d/x.gguf"));
+        assert!(!is_safe_relative_path(
+            "..\\..\\windows\\system32\\evil.gguf"
+        ));
+    }
+
+    #[test]
+    fn test_sanitize_siblings_drops_unsafe_paths() {
+        let sibling = |name: &str| HfApiSibling {
+            rfilename: name.to_string(),
+            size: Some(1),
+        };
+        let siblings = vec![
+            sibling("model-Q4_K_M.gguf"),
+            sibling("../../escape.gguf"),
+            sibling("/abs/escape.gguf"),
+            sibling("nested/model-Q8_0.gguf"),
+        ];
+
+        let kept: Vec<String> = sanitize_siblings(siblings)
+            .into_iter()
+            .map(|s| s.rfilename)
+            .collect();
+
+        assert_eq!(
+            kept,
+            vec![
+                "model-Q4_K_M.gguf".to_string(),
+                "nested/model-Q8_0.gguf".to_string()
+            ]
+        );
+    }
 
     #[test]
     fn test_parse_quantization() {
