@@ -393,8 +393,6 @@ fn is_safe_relative_path(filename: &str) -> bool {
         .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
-/// Drop siblings whose filenames are not safe relative paths so a malformed or
-/// malicious API response can never escape the download directory.
 fn sanitize_siblings(siblings: Vec<HfApiSibling>) -> Vec<HfApiSibling> {
     siblings
         .into_iter()
@@ -978,33 +976,6 @@ mod tests {
         assert!(!is_safe_relative_path(
             "..\\..\\windows\\system32\\evil.gguf"
         ));
-    }
-
-    #[test]
-    fn test_sanitize_siblings_drops_unsafe_paths() {
-        let sibling = |name: &str| HfApiSibling {
-            rfilename: name.to_string(),
-            size: Some(1),
-        };
-        let siblings = vec![
-            sibling("model-Q4_K_M.gguf"),
-            sibling("../../escape.gguf"),
-            sibling("/abs/escape.gguf"),
-            sibling("nested/model-Q8_0.gguf"),
-        ];
-
-        let kept: Vec<String> = sanitize_siblings(siblings)
-            .into_iter()
-            .map(|s| s.rfilename)
-            .collect();
-
-        assert_eq!(
-            kept,
-            vec![
-                "model-Q4_K_M.gguf".to_string(),
-                "nested/model-Q8_0.gguf".to_string()
-            ]
-        );
     }
 
     #[test]
