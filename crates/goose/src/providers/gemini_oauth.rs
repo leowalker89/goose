@@ -1024,8 +1024,7 @@ impl Provider for GeminiOAuthProvider {
                         .unwrap_or_else(ProviderError::stream_decode_error)
                 })?;
                 if message.is_some() || usage.is_some() {
-                    log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())
-                    ?;
+                    log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())?;
                 }
                 yield (message, usage);
             }

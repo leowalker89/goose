@@ -642,8 +642,7 @@ impl Provider for GcpVertexAIProvider {
 
             while let Some(message) = message_stream.next().await {
                 let (message, usage) = message.map_err(ProviderError::from_stream_error)?;
-                log.write(&message, usage.as_ref().map(|u| &u.usage))
-                        ?;
+                log.write(&message, usage.as_ref().map(|u| &u.usage))?;
                 yield (message, usage);
             }
         }))

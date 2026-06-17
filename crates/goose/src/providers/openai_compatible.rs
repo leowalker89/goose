@@ -195,8 +195,7 @@ pub fn stream_openai_compat(
                 e.downcast::<ProviderError>()
                     .unwrap_or_else(ProviderError::stream_decode_error)
             )?;
-            log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())
-                    ?;
+            log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())?;
             yield (message, usage);
         }
     }))
@@ -220,8 +219,7 @@ pub fn stream_responses_compat(
                 e.downcast::<ProviderError>()
                     .unwrap_or_else(ProviderError::stream_decode_error)
             )?;
-            log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())
-                    ?;
+            log.write(&message, usage.as_ref().map(|f| f.usage).as_ref())?;
             yield (message, usage);
         }
     }))
