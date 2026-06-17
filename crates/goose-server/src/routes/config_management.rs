@@ -474,6 +474,27 @@ fn provider_cache_exists(path: &std::path::Path, is_directory: bool) -> bool {
     })
 }
 
+fn remove_provider_cache_path(path: &std::path::Path, is_directory: bool) -> std::io::Result<()> {
+    let result = if is_directory {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn cleanup_provider_cache_definition(
+    definition: ProviderCacheSecretDefinition,
+) -> std::io::Result<()> {
+    let path = Paths::in_config_dir(definition.path);
+    remove_provider_cache_path(&path, definition.is_directory)
+}
+
 fn provider_cache_expiry(definition: ProviderCacheSecretDefinition) -> Option<DateTime<Utc>> {
     let path = Paths::in_config_dir(definition.path);
     let expiries = collect_json_expiries(&path, definition.is_directory);
@@ -739,6 +760,9 @@ pub async fn delete_provider_secret(Path(id): Path<String>) -> Result<Json<Strin
             )));
         }
         goose::providers::cleanup_provider(provider).await?;
+        if let Some(cache_definition) = cache_definition {
+            cleanup_provider_cache_definition(cache_definition)?;
+        }
         for shared_provider in provider_cache_providers_sharing_cache(provider) {
             unconfigure_provider(config, shared_provider)?;
         }
@@ -1276,6 +1300,9 @@ pub async fn cleanup_provider_cache(
     Path(name): Path<String>,
 ) -> Result<Json<String>, ErrorResponse> {
     goose::providers::cleanup_provider(&name).await?;
+    if let Some(cache_definition) = provider_cache_definition(&name) {
+        cleanup_provider_cache_definition(cache_definition)?;
+    }
     Ok(Json(format!("Cleaned up provider cache: {}", name)))
 }
 
@@ -1703,6 +1730,34 @@ mod tests {
             provider_cache_providers_sharing_cache("databricks_v2"),
             vec!["databricks", "databricks_v2"]
         );
+    }
+
+    #[test]
+    fn remove_provider_cache_path_removes_files_and_directories() {
+        let unique = format!(
+            "goose-server-provider-cache-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let file_path = root.join("tokens.json");
+        let dir_path = root.join("nested");
+        let nested_file = dir_path.join("info.json");
+
+        std::fs::create_dir_all(&dir_path).unwrap();
+        std::fs::write(&file_path, "{}").unwrap();
+        std::fs::write(&nested_file, "{}").unwrap();
+
+        remove_provider_cache_path(&file_path, false).unwrap();
+        remove_provider_cache_path(&dir_path, true).unwrap();
+
+        assert!(!file_path.exists());
+        assert!(!dir_path.exists());
+        remove_provider_cache_path(&file_path, false).unwrap();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

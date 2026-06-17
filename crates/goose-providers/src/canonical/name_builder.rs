@@ -45,7 +45,7 @@ pub fn map_provider_name(provider: &str) -> &str {
         "azure_openai" => "azure",
         "aws_bedrock" => "amazon-bedrock",
         "gcp_vertex_ai" => "google-vertex",
-        "gemini_acp" => "google",
+        "gemini-acp" => "google",
         "zhipu" => "zhipuai",
         "novita" => "novita-ai",
         "opencode_go" => "opencode-go",
@@ -320,6 +320,10 @@ mod tests {
         assert_eq!(
             map_to_canonical_model("openai", "gpt-4-turbo-2024-04-09", r),
             Some("openai/gpt-4-turbo".to_string())
+        );
+        assert_eq!(
+            map_to_canonical_model("gemini-acp", "gemini-2.5-pro", r),
+            Some("google/gemini-2.5-pro".to_string())
         );
         assert_eq!(
             map_to_canonical_model("opencode_go", "kimi-k2.6", r),
