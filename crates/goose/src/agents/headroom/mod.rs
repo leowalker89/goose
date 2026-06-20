@@ -17,8 +17,14 @@
 //! so the model knows content was elided and can re-run the tool for detail.
 
 pub mod adaptive_sizer;
+pub mod auth_mode;
+pub mod ccr;
 pub mod log_compressor;
 pub mod search_compressor;
+pub mod signals;
+pub mod smart_crusher;
+pub mod tokenizer;
+pub mod transforms;
 
 use std::sync::LazyLock;
 
