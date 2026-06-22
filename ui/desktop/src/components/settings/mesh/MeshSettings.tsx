@@ -13,11 +13,11 @@ import {
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import {
-  setConfigProvider,
-  updateCustomProvider,
-  createCustomProvider,
-  getCustomProvider,
-} from '../../../api';
+  acpCreateCustomProviderFromRequest,
+  acpGetCustomProvider,
+  acpSaveDefaults,
+  acpUpdateCustomProviderFromRequest,
+} from '../../../acp/providers';
 import { useModelAndProvider } from '../../ModelAndProviderContext';
 const MESH_API_PORT = 9337;
 const MESH_CONSOLE_PORT = 3131;
@@ -116,9 +116,9 @@ export const MeshSettings = () => {
     requires_auth: false,
   });
 
-  // Create or update the mesh custom provider via the REST API,
-  // which handles file writes and registry refresh atomically.
-  // Returns the provider ID to use with setConfigProvider.
+  // Create or update the mesh custom provider via ACP, which handles file
+  // writes and registry refresh atomically. Returns the provider ID to use
+  // when saving the active default.
   const ensureMeshProvider = async (models: string[]): Promise<string> => {
     const modelList = models.length > 0 ? models : [MESH_DEFAULT_MODEL];
     const body = meshProviderBody(modelList);
@@ -127,24 +127,17 @@ export const MeshSettings = () => {
     const idsToTry = meshProviderId === 'mesh' ? ['mesh'] : [meshProviderId, 'mesh'];
 
     for (const id of idsToTry) {
-      const existing = await getCustomProvider({ path: { id } });
-      if (existing.data) {
-        await updateCustomProvider({
-          path: { id },
-          body,
-          throwOnError: true,
-        });
+      const existing = await acpGetCustomProvider(id).catch(() => null);
+      if (existing) {
+        await acpUpdateCustomProviderFromRequest(id, body);
         setMeshProviderId(id);
         return id;
       }
     }
 
     // Provider doesn't exist yet — create it
-    const result = await createCustomProvider({
-      body,
-      throwOnError: true,
-    });
-    const newId = result.data?.provider_name ?? 'mesh';
+    const result = await acpCreateCustomProviderFromRequest(body);
+    const newId = result.provider_name ?? 'mesh';
     setMeshProviderId(newId);
     return newId;
   };
@@ -154,10 +147,7 @@ export const MeshSettings = () => {
     setError(null);
     try {
       const providerId = await ensureMeshProvider(statusInfo.models);
-      await setConfigProvider({
-        body: { provider: providerId, model: modelId },
-        throwOnError: true,
-      });
+      await acpSaveDefaults(providerId, modelId);
       await refreshCurrentModelAndProvider();
       setActiveModel(modelId);
     } catch (err) {

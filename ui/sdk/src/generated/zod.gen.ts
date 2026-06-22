@@ -988,6 +988,94 @@ export const zProviderConfigAuthenticateRequest_unstable = z.object({
     providerId: z.string()
 });
 
+/**
+ * List provider credentials stored locally by Goose.
+ */
+export const zProviderSecretsListRequest_unstable = z.record(z.unknown());
+
+export const zProviderSecretStorageDto = z.enum(['secret_store', 'provider_cache']);
+
+export const zProviderSecretStatusDto = z.enum([
+    'valid',
+    'expired',
+    'unknown'
+]);
+
+export const zProviderSecretDto = z.object({
+    id: z.string(),
+    provider: z.string(),
+    providerDisplayName: z.string(),
+    name: z.string(),
+    storage: zProviderSecretStorageDto,
+    expiresAt: z.union([
+        z.string(),
+        z.null()
+    ]).optional(),
+    status: zProviderSecretStatusDto,
+    configured: z.boolean(),
+    hasSecret: z.boolean(),
+    canDelete: z.boolean(),
+    canConfigure: z.boolean(),
+    configureProvider: z.union([
+        z.string(),
+        z.null()
+    ]).optional()
+});
+
+export const zProviderSecretsListResponse_unstable = z.object({
+    secrets: z.array(zProviderSecretDto)
+});
+
+/**
+ * Delete a locally stored provider credential by id.
+ */
+export const zProviderSecretDeleteRequest_unstable = z.object({
+    id: z.string()
+});
+
+/**
+ * Look up canonical (bundled-registry) model info for a provider/model pair.
+ */
+export const zCanonicalModelInfoRequest_unstable = z.object({
+    provider: z.string(),
+    model: z.string()
+});
+
+export const zCanonicalModelInfoDto = z.object({
+    provider: z.string(),
+    model: z.string(),
+    contextLimit: z.number().int().gte(0),
+    maxOutputTokens: z.union([
+        z.number().int().gte(0),
+        z.null()
+    ]).optional(),
+    reasoning: z.boolean(),
+    inputTokenCost: z.union([
+        z.number(),
+        z.null()
+    ]).optional(),
+    outputTokenCost: z.union([
+        z.number(),
+        z.null()
+    ]).optional(),
+    cacheReadTokenCost: z.union([
+        z.number(),
+        z.null()
+    ]).optional(),
+    cacheWriteTokenCost: z.union([
+        z.number(),
+        z.null()
+    ]).optional(),
+    currency: z.string()
+});
+
+export const zCanonicalModelInfoResponse_unstable = z.object({
+    modelInfo: z.union([
+        zCanonicalModelInfoDto,
+        z.null()
+    ]).optional()
+});
+
 export const zPreferenceKey = z.enum([
     'autoCompactThreshold',
     'gooseThinkingEffort',
@@ -1052,6 +1140,11 @@ export const zDefaultsSaveRequest_unstable = z.object({
         z.null()
     ]).optional()
 });
+
+/**
+ * Clear Goose default provider and model configuration.
+ */
+export const zDefaultsClearRequest_unstable = z.record(z.unknown());
 
 /**
  * Sources that onboarding knows how to discover and import.
@@ -2037,11 +2130,15 @@ export const zExtRequest = z.object({
             zProviderConfigSaveRequest_unstable,
             zProviderConfigDeleteRequest_unstable,
             zProviderConfigAuthenticateRequest_unstable,
+            zProviderSecretsListRequest_unstable,
+            zProviderSecretDeleteRequest_unstable,
+            zCanonicalModelInfoRequest_unstable,
             zPreferencesReadRequest_unstable,
             zPreferencesSaveRequest_unstable,
             zPreferencesRemoveRequest_unstable,
             zDefaultsReadRequest_unstable,
             zDefaultsSaveRequest_unstable,
+            zDefaultsClearRequest_unstable,
             zOnboardingImportScanRequest_unstable,
             zOnboardingImportApplyRequest_unstable,
             zExportSessionRequest_unstable,
@@ -2115,6 +2212,8 @@ export const zExtResponse = z.union([
                 zProviderConfigReadResponse_unstable,
                 zProviderConfigStatusResponse_unstable,
                 zProviderConfigChangeResponse_unstable,
+                zProviderSecretsListResponse_unstable,
+                zCanonicalModelInfoResponse_unstable,
                 zPreferencesReadResponse_unstable,
                 zDefaultsReadResponse_unstable,
                 zOnboardingImportScanResponse_unstable,
