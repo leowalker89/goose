@@ -191,11 +191,6 @@ impl ModelConfig {
             }
         }
 
-        if let Some(fast_config) = self.fast_model_config.take() {
-            self.fast_model_config =
-                Some(Box::new(fast_config.with_default_thinking_budget(budget)));
-        }
-
         self
     }
 
