@@ -14,16 +14,15 @@ import {
   acpKillRunningJob,
   acpInspectRunningJob,
 } from '../../acp/schedules';
-import SessionHistoryView from '../sessions/SessionHistoryView';
 import { ScheduleModal, NewSchedulePayload } from './ScheduleModal';
 import { toastError, toastSuccess } from '../../toasts';
 import { Loader2, Pause, Play, Edit, Square, Eye } from 'lucide-react';
 import cronstrue from 'cronstrue';
 import { formatToLocalDateWithTimezone } from '../../utils/date';
-import { acpLoadSession, sessionInfoToSession, type Session } from '../../acp/sessions';
 import { trackScheduleRunNow, getErrorType } from '../../utils/analytics';
 import { errorMessage } from '../../utils/conversionUtils';
 import { defineMessages, useIntl } from '../../i18n';
+import { useNavigation } from '../../hooks/useNavigation';
 
 const i18n = defineMessages({
   scheduleNotFound: { id: 'scheduleDetailView.scheduleNotFound', defaultMessage: 'Schedule Not Found' },
@@ -57,7 +56,6 @@ const i18n = defineMessages({
   created: { id: 'scheduleDetailView.created', defaultMessage: 'Created: {date}' },
   messages: { id: 'scheduleDetailView.messages', defaultMessage: 'Messages: {count}' },
   dir: { id: 'scheduleDetailView.dir', defaultMessage: 'Dir: {path}' },
-  tokens: { id: 'scheduleDetailView.tokens', defaultMessage: 'Tokens: {count}' },
   idLabel: { id: 'scheduleDetailView.idLabel', defaultMessage: 'ID:' },
   jobCancelled: { id: 'scheduleDetailView.jobCancelled', defaultMessage: 'Job Cancelled' },
   jobCancelledMsg: { id: 'scheduleDetailView.jobCancelledMsg', defaultMessage: 'The job was cancelled while starting up.' },
@@ -77,7 +75,6 @@ const i18n = defineMessages({
   scheduleUpdated: { id: 'scheduleDetailView.scheduleUpdated', defaultMessage: 'Schedule Updated' },
   updatedMsg: { id: 'scheduleDetailView.updatedMsg', defaultMessage: 'Updated "{id}"' },
   updateScheduleError: { id: 'scheduleDetailView.updateScheduleError', defaultMessage: 'Update Schedule Error' },
-  failedToLoadSession: { id: 'scheduleDetailView.failedToLoadSession', defaultMessage: 'Failed to load session' },
   scheduleNotFoundError: { id: 'scheduleDetailView.scheduleNotFoundError', defaultMessage: 'Schedule not found' },
 });
 
@@ -102,6 +99,7 @@ function metaNumber(session: SessionInfo, key: string): number | undefined {
 
 const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onNavigateBack }) => {
   const intl = useIntl();
+  const setView = useNavigation();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -111,10 +109,6 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const [isActionLoading, setIsActionLoading] = useState(false);
-
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-  const [isLoadingSession, setIsLoadingSession] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -150,11 +144,18 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
   }, [intl]);
 
   useEffect(() => {
-    if (scheduleId && !selectedSession) {
+    if (scheduleId) {
       fetchSessions(scheduleId);
       fetchSchedule(scheduleId);
     }
-  }, [scheduleId, selectedSession, fetchSchedule]);
+  }, [scheduleId, fetchSchedule]);
+
+  const openSession = useCallback((sessionId: string) => {
+    setView('pair', {
+      disableAnimation: true,
+      resumeSessionId: sessionId,
+    });
+  }, [setView]);
 
   const handleRunNow = async () => {
     if (!scheduleId) return;
@@ -267,34 +268,6 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
       setIsActionLoading(false);
     }
   };
-
-  const loadSession = async (sessionId: string) => {
-    setIsLoadingSession(true);
-    setSessionError(null);
-    try {
-      const { sessionInfo, meta } = await acpLoadSession(sessionId);
-      setSelectedSession(sessionInfoToSession(sessionInfo, meta));
-    } catch (err) {
-      const msg = errorMessage(err, 'Failed to load session');
-      setSessionError(msg);
-      toastError({ title: intl.formatMessage(i18n.failedToLoadSession), msg });
-    } finally {
-      setIsLoadingSession(false);
-    }
-  };
-
-  if (selectedSession) {
-    return (
-      <SessionHistoryView
-        session={selectedSession}
-        isLoading={isLoadingSession}
-        error={sessionError}
-        onBack={() => setSelectedSession(null)}
-        onRetry={() => loadSession(selectedSession.id)}
-        showActionButtons={true}
-      />
-    );
-  }
 
   if (!scheduleId) {
     return (
@@ -502,7 +475,7 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
                     <Card
                       key={sessionId}
                       className="p-4 bg-background-primary shadow cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                      onClick={() => loadSession(sessionId)}
+                      onClick={() => openSession(sessionId)}
                     >
                       <h3
                         className="text-sm font-semibold text-text-primary truncate"

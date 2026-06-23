@@ -554,12 +554,15 @@ impl Scheduler {
 
     pub async fn list_scheduled_jobs(&self) -> Vec<ScheduledJob> {
         self.sync_from_storage().await;
-        self.jobs
+        let mut jobs: Vec<ScheduledJob> = self
+            .jobs
             .lock()
             .await
             .values()
             .map(|(_, j)| j.clone())
-            .collect()
+            .collect();
+        jobs.sort_by(|a, b| a.id.cmp(&b.id));
+        jobs
     }
 
     pub async fn remove_scheduled_job(
