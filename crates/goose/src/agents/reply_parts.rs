@@ -374,17 +374,14 @@ impl Agent {
                     yield (None, None);
                 }
 
+                let final_usage = final_usage
+                    .map(|usage| usage_with_timings(usage, started_at, first_token_at));
+
                 if let Some(msg) = accumulated_message {
                     let processed = toolshim_postprocess(msg, &toolshim_tools).await?;
-                    let final_usage = final_usage.map(|usage| {
-                        usage_with_timings(usage, started_at, first_token_at)
-                    });
                     yield (Some(processed), final_usage);
                 } else if final_usage.is_some() {
                     // Preserve usage-only responses (no message content)
-                    let final_usage = final_usage.map(|usage| {
-                        usage_with_timings(usage, started_at, first_token_at)
-                    });
                     yield (None, final_usage);
                 }
             } else {

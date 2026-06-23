@@ -124,7 +124,6 @@ mod imp {
                 .temperature
                 .unwrap_or_else(|| temperature(request.settings));
             let eos_token_ids = loaded.model.eos_token_ids().to_vec();
-            let generation_started = std::time::Instant::now();
             let (generated_ids, draft_stats) =
                 if let Some(draft_model_path) = &request.draft_model_path {
                     if matches!(loaded.model.model_mut(), Model::Gemma4(_)) {
@@ -198,10 +197,9 @@ mod imp {
             });
             let _ = request.log.write(&log_json, Some(&usage));
             let stats = ProviderStats {
-                time_to_first_token_ms: None,
-                elapsed_ms: Some(generation_started.elapsed().as_millis() as u64),
                 output_tokens: Some(generated_ids.len()),
                 draft: draft_stats,
+                ..ProviderStats::default()
             };
             let provider_usage = ProviderUsage::new(request.model_name, usage).with_stats(stats);
             let _ = request.tx.blocking_send(Ok((None, Some(provider_usage))));
