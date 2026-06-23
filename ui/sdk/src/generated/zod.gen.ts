@@ -1459,11 +1459,35 @@ export const zRecipeToYamlResponse_unstable = z.object({
     yaml: z.string()
 });
 
-/**
- * Return list-style metadata for a single session without loading the conversation.
- */
-export const zGetSessionInfoRequest_unstable = z.object({
-    sessionId: z.string()
+export const zListSchedulesRequest_unstable = z.record(z.unknown());
+
+export const zScheduledJobDto = z.object({
+    id: z.string(),
+    source: z.string(),
+    cron: z.string(),
+    lastRun: z.union([
+        z.string(),
+        z.null()
+    ]).optional(),
+    currentlyRunning: z.boolean(),
+    paused: z.boolean(),
+    currentSessionId: z.union([
+        z.string(),
+        z.null()
+    ]).optional(),
+    jobStartTime: z.union([
+        z.string(),
+        z.null()
+    ]).optional()
+});
+
+export const zListSchedulesResponse_unstable = z.object({
+    jobs: z.array(zScheduledJobDto)
+});
+
+export const zListScheduleSessionsRequest_unstable = z.object({
+    scheduleId: z.string(),
+    limit: z.number().int().gte(0)
 });
 
 /**
@@ -1495,6 +1519,84 @@ export const zSessionInfo = z.object({
         z.record(z.unknown()),
         z.null()
     ]).optional()
+});
+
+export const zListScheduleSessionsResponse_unstable = z.object({
+    sessions: z.array(zSessionInfo)
+});
+
+export const zCreateScheduleRequest_unstable = z.object({
+    id: z.string(),
+    recipe: zRecipeDto,
+    cron: z.string()
+});
+
+export const zCreateScheduleResponse_unstable = z.object({
+    job: zScheduledJobDto
+});
+
+export const zDeleteScheduleRequest_unstable = z.object({
+    scheduleId: z.string()
+});
+
+export const zPauseScheduleRequest_unstable = z.object({
+    scheduleId: z.string()
+});
+
+export const zUnpauseScheduleRequest_unstable = z.object({
+    scheduleId: z.string()
+});
+
+export const zUpdateScheduleRequest_unstable = z.object({
+    scheduleId: z.string(),
+    cron: z.string()
+});
+
+export const zUpdateScheduleResponse_unstable = z.object({
+    job: zScheduledJobDto
+});
+
+export const zRunScheduleNowRequest_unstable = z.object({
+    scheduleId: z.string()
+});
+
+export const zRunScheduleNowResponse_unstable = z.object({
+    sessionId: z.string()
+});
+
+export const zKillRunningJobRequest_unstable = z.object({
+    jobId: z.string()
+});
+
+export const zKillRunningJobResponse_unstable = z.object({
+    message: z.string()
+});
+
+export const zInspectRunningJobRequest_unstable = z.object({
+    jobId: z.string()
+});
+
+export const zInspectRunningJobResponse_unstable = z.object({
+    running: z.boolean(),
+    sessionId: z.union([
+        z.string(),
+        z.null()
+    ]).optional(),
+    jobStartTime: z.union([
+        z.string(),
+        z.null()
+    ]).optional(),
+    runningDurationSeconds: z.union([
+        z.number().int(),
+        z.null()
+    ]).optional()
+});
+
+/**
+ * Return list-style metadata for a single session without loading the conversation.
+ */
+export const zGetSessionInfoRequest_unstable = z.object({
+    sessionId: z.string()
 });
 
 export const zGetSessionInfoResponse_unstable = z.object({
@@ -1962,6 +2064,16 @@ export const zExtRequest = z.object({
             zSaveRecipeRequest_unstable,
             zParseRecipeRequest_unstable,
             zRecipeToYamlRequest_unstable,
+            zListSchedulesRequest_unstable,
+            zListScheduleSessionsRequest_unstable,
+            zCreateScheduleRequest_unstable,
+            zDeleteScheduleRequest_unstable,
+            zPauseScheduleRequest_unstable,
+            zUnpauseScheduleRequest_unstable,
+            zUpdateScheduleRequest_unstable,
+            zRunScheduleNowRequest_unstable,
+            zKillRunningJobRequest_unstable,
+            zInspectRunningJobRequest_unstable,
             zGetSessionInfoRequest_unstable,
             zTruncateSessionConversationRequest_unstable,
             zUpdateSessionProjectRequest_unstable,
@@ -2031,6 +2143,13 @@ export const zExtResponse = z.union([
                 zSaveRecipeResponse_unstable,
                 zParseRecipeResponse_unstable,
                 zRecipeToYamlResponse_unstable,
+                zListSchedulesResponse_unstable,
+                zListScheduleSessionsResponse_unstable,
+                zCreateScheduleResponse_unstable,
+                zUpdateScheduleResponse_unstable,
+                zRunScheduleNowResponse_unstable,
+                zKillRunningJobResponse_unstable,
+                zInspectRunningJobResponse_unstable,
                 zGetSessionInfoResponse_unstable,
                 zCreateSourceResponse_unstable,
                 zListSourcesResponse_unstable,

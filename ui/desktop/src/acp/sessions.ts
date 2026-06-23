@@ -11,6 +11,8 @@ import { DEFAULT_CHAT_TITLE } from '../contexts/ChatContext';
 import type { ExtensionLoadResult, Session } from '../api';
 import type { Recipe } from '../recipe';
 
+export type { Session } from '../api';
+
 interface GooseSessionInfoMeta {
   messageCount?: number;
   createdAt?: string;
