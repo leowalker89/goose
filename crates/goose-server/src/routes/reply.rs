@@ -243,7 +243,10 @@ pub async fn reply(
     let task_tx = tx.clone();
 
     drop(tokio::spawn(async move {
-        let agent = match state.get_agent(session_id.clone()).await {
+        let agent = match state
+            .get_agent_with_session_start_hook(session_id.clone())
+            .await
+        {
             Ok(agent) => agent,
             Err(e) => {
                 tracing::error!("Failed to get session agent: {}", e);

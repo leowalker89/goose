@@ -118,6 +118,11 @@ impl AgentManager {
             .agent)
     }
 
+    pub async fn get_cached_agent(&self, session_id: &str) -> Option<Arc<Agent>> {
+        let mut sessions = self.sessions.write().await;
+        sessions.get(session_id).cloned()
+    }
+
     pub async fn get_or_create_agent_with_runtime_context(
         &self,
         session_id: String,

@@ -103,7 +103,8 @@ impl GooseAcpAgent {
             .delete_session(&req.session_id)
             .await
             .internal_err()?;
-        self.sessions.lock().await.remove(&req.session_id);
+        self.remove_active_session_and_emit_end_hook(&req.session_id)
+            .await;
         let _ = self.agent_manager.remove_session(&req.session_id).await;
         Ok(EmptyResponse {})
     }
@@ -219,7 +220,8 @@ impl GooseAcpAgent {
             .apply()
             .await
             .internal_err()?;
-        self.sessions.lock().await.remove(&req.session_id);
+        self.remove_active_session_and_emit_end_hook(&req.session_id)
+            .await;
         let _ = self.agent_manager.remove_session(&req.session_id).await;
         Ok(EmptyResponse {})
     }

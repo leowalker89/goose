@@ -1197,7 +1197,7 @@ impl GooseAcpAgent {
         session_id: String,
         agent: Arc<Agent>,
         tool_requests: HashMap<String, ToolRequest>,
-    ) {
+    ) -> bool {
         let acp_session = GooseAcpSession {
             agent,
             tool_requests,
@@ -1205,7 +1205,20 @@ impl GooseAcpAgent {
             responded_tool_ids: HashSet::new(),
             summarized_chains: HashSet::new(),
         };
-        self.sessions.lock().await.insert(session_id, acp_session);
+        let mut sessions = self.sessions.lock().await;
+        let is_new = !sessions.contains_key(&session_id);
+        sessions.insert(session_id, acp_session);
+        is_new
+    }
+
+    async fn remove_active_session_and_emit_end_hook(&self, session_id: &str) {
+        let session = self.sessions.lock().await.remove(session_id);
+        if let Some(session) = session {
+            session
+                .agent
+                .emit_hook(crate::hooks::HookEvent::SessionEnd, session_id)
+                .await;
+        }
     }
 
     async fn activate_acp_session(
@@ -1215,8 +1228,14 @@ impl GooseAcpAgent {
         tool_requests: HashMap<String, ToolRequest>,
     ) -> Result<(Arc<Agent>, Vec<ExtensionLoadResult>), agent_client_protocol::Error> {
         let (agent, extension_results) = self.prepare_acp_session_agent(cx, session).await?;
-        self.register_acp_session(session.id.clone(), agent.clone(), tool_requests)
+        let should_emit_start = self
+            .register_acp_session(session.id.clone(), agent.clone(), tool_requests)
             .await;
+        if should_emit_start {
+            agent
+                .emit_hook(crate::hooks::HookEvent::SessionStart, &session.id)
+                .await;
+        }
 
         Ok((agent, extension_results))
     }
@@ -2898,9 +2917,8 @@ impl GooseAcpAgent {
             token.cancel();
         }
 
-        let mut sessions = self.sessions.lock().await;
-        sessions.remove(session_id);
-        drop(sessions);
+        self.remove_active_session_and_emit_end_hook(session_id)
+            .await;
 
         let _ = self.agent_manager.remove_session(session_id).await;
 

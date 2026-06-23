@@ -29,6 +29,7 @@ pub struct AppState {
     pub tunnel_manager: Arc<TunnelManager>,
     pub gateway_manager: Arc<GatewayManager>,
     pub extension_loading_tasks: ExtensionLoadingTasks,
+    lifecycle_started_sessions: Arc<Mutex<HashSet<String>>>,
     #[cfg(feature = "local-inference")]
     inference_runtime: Arc<OnceLock<Arc<InferenceRuntime>>>,
     session_buses: Arc<Mutex<HashMap<String, Arc<SessionEventBus>>>>,
@@ -49,6 +50,7 @@ impl AppState {
             tunnel_manager,
             gateway_manager,
             extension_loading_tasks: Arc::new(Mutex::new(HashMap::new())),
+            lifecycle_started_sessions: Arc::new(Mutex::new(HashSet::new())),
             #[cfg(feature = "local-inference")]
             inference_runtime: Arc::new(OnceLock::new()),
             session_buses: Arc::new(Mutex::new(HashMap::new())),
@@ -163,6 +165,38 @@ impl AppState {
 
     pub async fn get_agent(&self, session_id: String) -> anyhow::Result<Arc<goose::agents::Agent>> {
         self.agent_manager.get_or_create_agent(session_id).await
+    }
+
+    pub async fn get_agent_with_session_start_hook(
+        &self,
+        session_id: String,
+    ) -> anyhow::Result<Arc<goose::agents::Agent>> {
+        let agent = self.get_agent(session_id.clone()).await?;
+        let should_emit = {
+            let mut started_sessions = self.lifecycle_started_sessions.lock().await;
+            started_sessions.insert(session_id.clone())
+        };
+        if should_emit {
+            agent
+                .emit_hook(goose::hooks::HookEvent::SessionStart, &session_id)
+                .await;
+        }
+        Ok(agent)
+    }
+
+    pub async fn emit_session_end_hook(&self, session_id: &str) {
+        let should_emit = {
+            let mut started_sessions = self.lifecycle_started_sessions.lock().await;
+            started_sessions.remove(session_id)
+        };
+        if !should_emit {
+            return;
+        }
+        if let Some(agent) = self.agent_manager.get_cached_agent(session_id).await {
+            agent
+                .emit_hook(goose::hooks::HookEvent::SessionEnd, session_id)
+                .await;
+        }
     }
 
     pub async fn get_agent_for_route(
