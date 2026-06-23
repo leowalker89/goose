@@ -43,6 +43,13 @@ impl ProviderUsage {
         self
     }
 
+    pub fn with_timings(mut self, time_to_first_token_ms: Option<u64>, elapsed_ms: u64) -> Self {
+        let stats = self.stats.get_or_insert_with(ProviderStats::default);
+        stats.time_to_first_token_ms = stats.time_to_first_token_ms.or(time_to_first_token_ms);
+        stats.elapsed_ms = stats.elapsed_ms.or(Some(elapsed_ms));
+        self
+    }
+
     /// Combine this ProviderUsage with another, adding their token counts
     /// Uses the model from this ProviderUsage
     pub fn combine_with(&self, other: &ProviderUsage) -> ProviderUsage {

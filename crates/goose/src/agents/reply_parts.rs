@@ -2,6 +2,7 @@ use anyhow::Result;
 use goose_providers::errors::ProviderError;
 use regex::Regex;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_stream::try_stream;
 use futures::stream::StreamExt;
@@ -24,6 +25,21 @@ use crate::providers::toolshim::{
 use goose_providers::conversation::token_usage::{ProviderUsage, Usage};
 use rmcp::model::Tool;
 use tracing::warn;
+
+fn duration_millis(duration: Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+fn usage_with_timings(
+    usage: ProviderUsage,
+    started_at: Instant,
+    first_token_at: Option<Instant>,
+) -> ProviderUsage {
+    usage.with_timings(
+        first_token_at.map(|time| duration_millis(time.duration_since(started_at))),
+        duration_millis(started_at.elapsed()),
+    )
+}
 
 async fn enhance_model_error(error: ProviderError, provider: &Arc<dyn Provider>) -> ProviderError {
     let ProviderError::RequestFailed(ref msg) = error else {
@@ -284,6 +300,7 @@ impl Agent {
         let model_config = provider
             .get_model_config()
             .with_default_thinking_effort(Config::global().get_goose_thinking_effort());
+        let started_at = Instant::now();
         debug!("WAITING_LLM_STREAM_START");
         let stream_result = provider
             .stream(
@@ -310,6 +327,8 @@ impl Agent {
         };
 
         Ok(Box::pin(try_stream! {
+            let mut first_token_at: Option<Instant> = None;
+
             if config.toolshim {
                 // Toolshim mode: accumulate the full response before processing
                 // so that tool-use markers spanning multiple chunks are detected
@@ -321,6 +340,7 @@ impl Agent {
                     let (msg_opt, usage_opt) = result?;
 
                     if let Some(msg) = msg_opt {
+                        first_token_at.get_or_insert_with(Instant::now);
                         accumulated_message = Some(match accumulated_message {
                             Some(mut prev) => {
                                 for new_content in msg.content {
@@ -352,14 +372,27 @@ impl Agent {
 
                 if let Some(msg) = accumulated_message {
                     let processed = toolshim_postprocess(msg, &toolshim_tools).await?;
+                    let final_usage = final_usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
                     yield (Some(processed), final_usage);
                 } else if final_usage.is_some() {
                     // Preserve usage-only responses (no message content)
+                    let final_usage = final_usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
                     yield (None, final_usage);
                 }
             } else {
                 while let Some(result) = stream.next().await {
                     let (message, usage) = result?;
+
+                    if message.is_some() {
+                        first_token_at.get_or_insert_with(Instant::now);
+                    }
+                    let usage = usage.map(|usage| {
+                        usage_with_timings(usage, started_at, first_token_at)
+                    });
 
                     yield (message, usage);
                 }
@@ -616,9 +649,10 @@ mod tests {
     use crate::providers::base::Provider;
     use crate::session::session_manager::SessionType;
     use async_trait::async_trait;
-    use goose_providers::conversation::token_usage::{ProviderUsage, Usage};
+    use goose_providers::conversation::token_usage::{ProviderStats, ProviderUsage, Usage};
     use goose_providers::model::ModelConfig;
     use rmcp::object;
+    use std::sync::Arc;
 
     #[derive(Clone)]
     struct MockProvider {
@@ -751,6 +785,102 @@ mod tests {
             error_seen,
             "Error should have been propagated, not silently ignored"
         );
+    }
+
+    #[derive(Clone)]
+    struct TimedUsageProvider {
+        model_config: ModelConfig,
+        usage_before_message: bool,
+    }
+
+    #[async_trait]
+    impl Provider for TimedUsageProvider {
+        fn get_name(&self) -> &str {
+            "timed"
+        }
+
+        fn get_model_config(&self) -> ModelConfig {
+            self.model_config.clone()
+        }
+
+        async fn stream(
+            &self,
+            _model_config: &ModelConfig,
+            _session_id: &str,
+            _system: &str,
+            _messages: &[Message],
+            _tools: &[Tool],
+        ) -> Result<MessageStream, ProviderError> {
+            let usage = ProviderUsage::new("timed-model".to_string(), Usage::default()).with_stats(
+                ProviderStats {
+                    output_tokens: Some(7),
+                    ..ProviderStats::default()
+                },
+            );
+            let usage_before_message = self.usage_before_message;
+
+            Ok(Box::pin(try_stream! {
+                if usage_before_message {
+                    yield (None, Some(usage.clone()));
+                }
+
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                yield (Some(Message::assistant().with_text("ok")), None);
+
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                if !usage_before_message {
+                    yield (None, Some(usage));
+                }
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_response_adds_timings_to_usage() {
+        let provider = Arc::new(TimedUsageProvider {
+            model_config: ModelConfig::new("timed-model").unwrap(),
+            usage_before_message: false,
+        });
+
+        let mut stream =
+            Agent::stream_response_from_provider(provider, "session", "system", &[], &[], &[])
+                .await
+                .unwrap();
+
+        let mut final_usage = None;
+        while let Some(next) = stream.next().await {
+            let (_message, usage) = next.unwrap();
+            final_usage = final_usage.or(usage);
+        }
+
+        let stats = final_usage.unwrap().stats.unwrap();
+        assert!(stats.time_to_first_token_ms.is_some());
+        assert!(stats.elapsed_ms.unwrap() >= stats.time_to_first_token_ms.unwrap());
+        assert_eq!(stats.output_tokens, Some(7));
+    }
+
+    #[tokio::test]
+    async fn toolshim_stream_response_adds_timings_after_message_arrives() {
+        let provider = Arc::new(TimedUsageProvider {
+            model_config: ModelConfig::new("timed-model").unwrap().with_toolshim(true),
+            usage_before_message: true,
+        });
+
+        let mut stream =
+            Agent::stream_response_from_provider(provider, "session", "system", &[], &[], &[])
+                .await
+                .unwrap();
+
+        let mut final_usage = None;
+        while let Some(next) = stream.next().await {
+            let (_message, usage) = next.unwrap();
+            final_usage = final_usage.or(usage);
+        }
+
+        let stats = final_usage.unwrap().stats.unwrap();
+        assert!(stats.time_to_first_token_ms.is_some());
+        assert!(stats.elapsed_ms.unwrap() >= stats.time_to_first_token_ms.unwrap());
+        assert_eq!(stats.output_tokens, Some(7));
     }
 
     #[tokio::test]
