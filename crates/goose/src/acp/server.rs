@@ -97,6 +97,7 @@ mod onboarding;
 mod providers;
 mod recipe;
 mod resources;
+mod schedule;
 mod sources;
 mod tool_notifications;
 mod tools;
