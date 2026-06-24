@@ -1,28 +1,25 @@
-use tokio::task_local;
-
 pub use goose_providers::session_context::SESSION_ID_HEADER;
 
 pub const TOOL_CALL_REQUEST_ID_HEADER: &str = "agent-tool-call-request-id";
 pub const WORKING_DIR_HEADER: &str = "agent-working-dir";
 
-task_local! {
-    pub static SESSION_ID: Option<String>;
-}
-
 pub async fn with_session_id<F>(session_id: Option<String>, f: F) -> F::Output
 where
     F: std::future::Future,
 {
-    if let Some(id) = session_id {
-        let provider_scope = goose_providers::session_context::with_session_id(&id, f);
-        SESSION_ID.scope(Some(id.clone()), provider_scope).await
-    } else {
-        f.await
+    match session_id {
+        Some(id) => goose_providers::session_context::with_session_id(&id, f).await,
+        None => f.await,
     }
 }
 
 pub fn current_session_id() -> Option<String> {
-    SESSION_ID.try_with(|id| id.clone()).ok().flatten()
+    let id = goose_providers::session_context::current_session_id();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
 }
 
 /// Local OS user running goose, shared by the OTLP `user.name` resource
