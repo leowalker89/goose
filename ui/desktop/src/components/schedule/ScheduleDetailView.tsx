@@ -59,8 +59,8 @@ const i18n = defineMessages({
   idLabel: { id: 'scheduleDetailView.idLabel', defaultMessage: 'ID:' },
   jobCancelled: { id: 'scheduleDetailView.jobCancelled', defaultMessage: 'Job Cancelled' },
   jobCancelledMsg: { id: 'scheduleDetailView.jobCancelledMsg', defaultMessage: 'The job was cancelled while starting up.' },
-  scheduleTriggered: { id: 'scheduleDetailView.scheduleTriggered', defaultMessage: 'Schedule Triggered' },
-  newSession: { id: 'scheduleDetailView.newSession', defaultMessage: 'New session: {sessionId}' },
+  scheduleCompleted: { id: 'scheduleDetailView.scheduleCompleted', defaultMessage: 'Schedule Completed' },
+  completedSession: { id: 'scheduleDetailView.completedSession', defaultMessage: 'Session: {sessionId}' },
   runScheduleError: { id: 'scheduleDetailView.runScheduleError', defaultMessage: 'Run Schedule Error' },
   scheduleUnpaused: { id: 'scheduleDetailView.scheduleUnpaused', defaultMessage: 'Schedule Unpaused' },
   unpausedMsg: { id: 'scheduleDetailView.unpausedMsg', defaultMessage: 'Unpaused "{id}"' },
@@ -161,12 +161,12 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
     if (!scheduleId) return;
     setIsActionLoading(true);
     try {
-      const newSessionId = await acpRunScheduleNow(scheduleId);
+      const result = await acpRunScheduleNow(scheduleId);
       trackScheduleRunNow(true);
-      if (newSessionId === 'CANCELLED') {
+      if (result.status === 'cancelled') {
         toastSuccess({ title: intl.formatMessage(i18n.jobCancelled), msg: intl.formatMessage(i18n.jobCancelledMsg) });
-      } else {
-        toastSuccess({ title: intl.formatMessage(i18n.scheduleTriggered), msg: intl.formatMessage(i18n.newSession, { sessionId: newSessionId }) });
+      } else if (result.sessionId) {
+        toastSuccess({ title: intl.formatMessage(i18n.scheduleCompleted), msg: intl.formatMessage(i18n.completedSession, { sessionId: result.sessionId }) });
       }
       await fetchSessions(scheduleId);
       await fetchSchedule(scheduleId);

@@ -1560,8 +1560,14 @@ export const zRunScheduleNowRequest_unstable = z.object({
     scheduleId: z.string()
 });
 
+export const zRunScheduleNowStatus = z.enum(['completed', 'cancelled']);
+
 export const zRunScheduleNowResponse_unstable = z.object({
-    sessionId: z.string()
+    status: zRunScheduleNowStatus,
+    sessionId: z.union([
+        z.string(),
+        z.null()
+    ]).optional()
 });
 
 export const zKillRunningJobRequest_unstable = z.object({

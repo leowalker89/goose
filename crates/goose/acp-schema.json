@@ -3755,15 +3755,28 @@
     "RunScheduleNowResponse_unstable": {
       "type": "object",
       "properties": {
+        "status": {
+          "$ref": "#/$defs/RunScheduleNowStatus"
+        },
         "sessionId": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
-        "sessionId"
+        "status"
       ],
       "x-side": "agent",
       "x-method": "_goose/unstable/schedules/run-now"
+    },
+    "RunScheduleNowStatus": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "cancelled"
+      ]
     },
     "KillRunningJobRequest_unstable": {
       "type": "object",

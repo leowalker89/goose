@@ -3299,6 +3299,9 @@
   "scheduleDetailView.cannotModifyRunning": {
     "defaultMessage": "Cannot trigger or modify a schedule while it's already running."
   },
+  "scheduleDetailView.completedSession": {
+    "defaultMessage": "Session: {sessionId}"
+  },
   "scheduleDetailView.created": {
     "defaultMessage": "Created: {date}"
   },
@@ -3319,9 +3322,6 @@
   },
   "scheduleDetailView.errorPrefix": {
     "defaultMessage": "Error: {error}"
-  },
-  "scheduleDetailView.failedToLoadSession": {
-    "defaultMessage": "Failed to load session"
   },
   "scheduleDetailView.idLabel": {
     "defaultMessage": "ID:"
@@ -3365,9 +3365,6 @@
   "scheduleDetailView.messages": {
     "defaultMessage": "Messages: {count}"
   },
-  "scheduleDetailView.newSession": {
-    "defaultMessage": "New session: {sessionId}"
-  },
   "scheduleDetailView.noScheduleId": {
     "defaultMessage": "No schedule ID provided. Return to schedules list."
   },
@@ -3404,6 +3401,9 @@
   "scheduleDetailView.runScheduleNow": {
     "defaultMessage": "Run Schedule Now"
   },
+  "scheduleDetailView.scheduleCompleted": {
+    "defaultMessage": "Schedule Completed"
+  },
   "scheduleDetailView.scheduleDetails": {
     "defaultMessage": "Schedule Details"
   },
@@ -3422,9 +3422,6 @@
   "scheduleDetailView.schedulePaused": {
     "defaultMessage": "Schedule Paused"
   },
-  "scheduleDetailView.scheduleTriggered": {
-    "defaultMessage": "Schedule Triggered"
-  },
   "scheduleDetailView.scheduleUnpaused": {
     "defaultMessage": "Schedule Unpaused"
   },
@@ -3433,9 +3430,6 @@
   },
   "scheduleDetailView.sessionId": {
     "defaultMessage": "Session ID: {id}"
-  },
-  "scheduleDetailView.tokens": {
-    "defaultMessage": "Tokens: {count}"
   },
   "scheduleDetailView.unpauseSchedule": {
     "defaultMessage": "Unpause Schedule"

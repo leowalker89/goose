@@ -2,6 +2,7 @@ import type {
   CreateScheduleRequest_unstable,
   InspectRunningJobResponse_unstable,
   KillRunningJobResponse_unstable,
+  RunScheduleNowResponse_unstable,
   ScheduledJobDto,
   SessionInfo,
 } from '@aaif/goose-sdk';
@@ -122,12 +123,14 @@ export async function acpListScheduleSessions(
   }
 }
 
-export async function acpRunScheduleNow(scheduleId: string): Promise<string> {
+export async function acpRunScheduleNow(
+  scheduleId: string
+): Promise<RunScheduleNowResponse_unstable> {
   try {
     const client = await getAcpClient();
     const response = await client.goose.schedulesRunNow_unstable({ scheduleId });
     clearInFlightScheduleReads();
-    return response.sessionId;
+    return response;
   } catch (error) {
     throw normalizeAcpError(error, 'Failed to run schedule now');
   }

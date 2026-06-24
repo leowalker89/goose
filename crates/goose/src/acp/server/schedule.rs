@@ -3,8 +3,8 @@ use goose_sdk_types::custom_requests::{
     InspectRunningJobRequest, InspectRunningJobResponse, KillRunningJobRequest,
     KillRunningJobResponse, ListScheduleSessionsRequest, ListScheduleSessionsResponse,
     ListSchedulesRequest, ListSchedulesResponse, PauseScheduleRequest, RunScheduleNowRequest,
-    RunScheduleNowResponse, ScheduledJobDto, UnpauseScheduleRequest, UpdateScheduleRequest,
-    UpdateScheduleResponse,
+    RunScheduleNowResponse, RunScheduleNowStatus, ScheduledJobDto, UnpauseScheduleRequest,
+    UpdateScheduleRequest, UpdateScheduleResponse,
 };
 use tokio::fs;
 
@@ -98,7 +98,8 @@ fn run_schedule_now_error(
             if error.to_string().contains("was successfully cancelled") =>
         {
             Ok(RunScheduleNowResponse {
-                session_id: "CANCELLED".to_string(),
+                status: RunScheduleNowStatus::Cancelled,
+                session_id: None,
             })
         }
         error => Err(agent_client_protocol::Error::internal_error()
@@ -286,7 +287,10 @@ impl GooseAcpAgent {
             .run_now(&req.schedule_id)
             .await
         {
-            Ok(session_id) => Ok(RunScheduleNowResponse { session_id }),
+            Ok(session_id) => Ok(RunScheduleNowResponse {
+                status: RunScheduleNowStatus::Completed,
+                session_id: Some(session_id),
+            }),
             Err(error) => run_schedule_now_error(error),
         }
     }
