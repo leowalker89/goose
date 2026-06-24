@@ -30,6 +30,13 @@ pub enum TurnOutcome {
     /// Append messages to the conversation
     AppendMessages(Vec<Message>),
 
+    /// Append messages, optionally notify that history changed, then hand
+    /// control back to the caller.
+    AppendMessagesAndYield {
+        messages: Vec<Message>,
+        history_replaced: bool,
+    },
+
     /// Replace the entire conversation (compaction, `/clear`, …)
     ReplaceConversation(Conversation),
 

@@ -7,11 +7,13 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::agents::agent::DEFAULT_MAX_TURNS;
+use crate::agents::execute_commands::parse_slash_command;
 use crate::agents::state_machine::operation::{Emitter, Operation, TurnOutcome};
 use crate::agents::state_machine::ops_compaction::CompactionOperation;
 use crate::agents::state_machine::ops_exit_on_error::ExitOnErrorOperation;
 use crate::agents::state_machine::ops_llm::LlmOperation;
 use crate::agents::state_machine::ops_maxturns::MaxTurnsOperation;
+use crate::agents::state_machine::ops_slash_command::SlashCommandOperation;
 use crate::agents::state_machine::ops_toolcalling::ToolExecutionOperation;
 use crate::agents::types::SessionConfig;
 use crate::agents::{Agent, AgentEvent};
@@ -32,11 +34,12 @@ pub async fn reply(
     // loop body never has to branch on the `Option`.
     let cancel = cancel_token.unwrap_or_default();
 
-    session_manager
-        .add_message(&session_config.id, &user_message)
-        .await?;
-
     let session_id = session_config.id.clone();
+    if parse_slash_command(&user_message.as_concat_text()).is_none() {
+        session_manager
+            .add_message(&session_id, &user_message)
+            .await?;
+    }
 
     // Session naming is out-of-band: a detached task that overlaps the reply
     // loop, generates a title once early in a session, persists it, and pushes
@@ -78,7 +81,8 @@ pub async fn reply(
             .unwrap_or(DEFAULT_MAX_TURNS)
     });
 
-    let operations: Vec<Arc<dyn Operation>> = vec![
+    let operations: Vec<Arc<dyn Operation + '_>> = vec![
+        Arc::new(SlashCommandOperation::new(agent, user_message)),
         Arc::new(MaxTurnsOperation::new(max_turns)),
         Arc::new(CompactionOperation::new(
             provider.clone(),
@@ -135,6 +139,23 @@ pub async fn reply(
                     for msg in &messages {
                         session_manager.add_message(&session.id, msg).await?;
                     }
+                }
+                TurnOutcome::AppendMessagesAndYield {
+                    messages,
+                    history_replaced,
+                } => {
+                    for msg in &messages {
+                        session_manager.add_message(&session.id, msg).await?;
+                    }
+                    if history_replaced {
+                        let updated_session = session_manager
+                            .get_session(&session.id, true)
+                            .await?;
+                        if let Some(conversation) = updated_session.conversation {
+                            yield AgentEvent::HistoryReplaced(conversation);
+                        }
+                    }
+                    break;
                 }
                 TurnOutcome::ReplaceConversation(conversation) => {
                     session_manager

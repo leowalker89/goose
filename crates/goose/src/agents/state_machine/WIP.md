@@ -20,6 +20,7 @@ state_machine/
 ├── operation.rs    # Operation trait, Emitter, TurnOutcome
 ├── ops_llm.rs      # chat LLM operation (streaming); provider errors -> error messages
 ├── ops_toolcalling.rs  # execute tool requests, synthesize responses
+├── ops_slash_command.rs # first-turn slash command handling
 ├── ops_maxturns.rs # halt after N assistant turns
 ├── ops_compaction.rs   # proactive + reactive (ContextLengthExceeded) auto-compact
 ├── ops_exit_on_error.rs # terminal: yield when the tail is an unrecovered error
@@ -36,6 +37,7 @@ state_machine/
 - [x] `Operation` trait with `applies(&Session)` + `run(&Session, Emitter) -> TurnOutcome`
 - [x] Streaming `LlmOperation` with tools (model can emit `ToolRequest`s)
 - [x] `ToolExecutionOperation` — bare execute-and-respond (no approval/frontend/chat-mode)
+- [x] `SlashCommandOperation` — first-turn command handling, including `/goal` kickoff
 - [x] `MaxTurnsOperation` — halts the loop after `max_turns` assistant turns this request
 - [x] `CompactionOperation` — proactive auto-compact before an LLM call (returns `ReplaceConversation`)
 - [x] Machine driver applies `AppendMessages`, `ReplaceConversation`, `YieldToClient`
@@ -220,7 +222,7 @@ the error and retry with a new message. This replaces the old fire-and-forget
 | **Retry / goal / grind / final-output** | `handle_retry_logic` + `goal` / `grind` / `final_output` blocks | One op when last assistant message has no tool requests. May append a nudge or `YieldToClient`. |
 | **Subagent sync** | `subagent_handler` + `moim::inject_moim` | When subagents have results to report: append, run another turn. |
 | **Hooks (cross-cutting)** | scattered `hook_manager.emit(...)` and `emit_blocking(...)` calls | Run alongside ops, not in the ordered list. `UserPromptSubmit` on entry, `Stop` before `YieldToClient`. Denial flows back via session state. |
-| **Slash commands** | `execute_command` block in `reply()` | First-turn-only op. May short-circuit with an assistant response and `YieldToClient`. |
+| **Slash commands** | `execute_command` block in `reply()` | **Landed.** First-turn-only op. Non-turn assistant responses append user-visible / agent-invisible command + response and yield. `/goal` / `/grind` commands that start turns append the visible command/confirmation plus a hidden kickoff user message, then continue into the LLM op. Prompt/skill commands that resolve to agent-visible user text append that hidden text and continue. |
 | **Refresh tools after `manage_extensions`** | `tools_updated` block | Either a tail-step of the Tool execution op or a separate op. |
 
 ---

@@ -13,6 +13,7 @@ mod ops_compaction;
 mod ops_exit_on_error;
 mod ops_llm;
 mod ops_maxturns;
+mod ops_slash_command;
 mod ops_toolcalling;
 
 pub mod test_helpers;
