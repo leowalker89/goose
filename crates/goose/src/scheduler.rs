@@ -773,14 +773,27 @@ impl Scheduler {
             }
         }
 
+        let token = {
+            let mut tasks = self.running_tasks.lock().await;
+            tasks.remove(sched_id)
+        };
+        if let Some(token) = token {
+            token.cancel();
+        }
+
         {
-            let tasks = self.running_tasks.lock().await;
-            if let Some(token) = tasks.get(sched_id) {
-                token.cancel();
+            let mut jobs_guard = self.jobs.lock().await;
+            match jobs_guard.get_mut(sched_id) {
+                Some((_, job)) => {
+                    job.currently_running = false;
+                    job.current_session_id = None;
+                    job.process_start_time = None;
+                }
+                None => return Err(SchedulerError::JobNotFound(sched_id.to_string())),
             }
         }
 
-        Ok(())
+        persist_jobs(&self.storage_path, &self.jobs).await
     }
 
     pub async fn get_running_job_info(
@@ -1226,6 +1239,63 @@ mod tests {
             !recipe_path.exists(),
             "Recipe should be deleted when remove_recipe is true"
         );
+    }
+
+    #[tokio::test]
+    async fn test_kill_running_job_clears_state_and_persists() {
+        let temp_dir = tempdir().unwrap();
+        let storage_path = temp_dir.path().join("schedule.json");
+        let recipe_path = create_test_recipe(temp_dir.path(), "running_job");
+        let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
+        let scheduler = Scheduler::new(storage_path.clone(), session_manager)
+            .await
+            .unwrap();
+
+        let job = ScheduledJob {
+            id: "running_job".to_string(),
+            source: recipe_path.to_string_lossy().to_string(),
+            cron: "0 0 0 1 1 *".to_string(),
+            last_run: None,
+            currently_running: false,
+            paused: false,
+            current_session_id: None,
+            process_start_time: None,
+            parameters: vec![],
+            recipe_base_dir: None,
+        };
+
+        scheduler.add_scheduled_job(job, false).await.unwrap();
+        {
+            let mut jobs_guard = scheduler.jobs.lock().await;
+            let (_, job) = jobs_guard.get_mut("running_job").unwrap();
+            job.currently_running = true;
+            job.current_session_id = Some("session-id".to_string());
+            job.process_start_time = Some(Utc::now());
+        }
+        {
+            let mut tasks = scheduler.running_tasks.lock().await;
+            tasks.insert("running_job".to_string(), CancellationToken::new());
+        }
+        persist_jobs(&storage_path, &scheduler.jobs).await.unwrap();
+
+        scheduler.kill_running_job("running_job").await.unwrap();
+
+        let jobs = scheduler.list_scheduled_jobs().await;
+        let killed_job = jobs.iter().find(|job| job.id == "running_job").unwrap();
+        assert!(!killed_job.currently_running);
+        assert!(killed_job.current_session_id.is_none());
+        assert!(killed_job.process_start_time.is_none());
+        assert!(scheduler.running_tasks.lock().await.is_empty());
+
+        let persisted_jobs: Vec<ScheduledJob> =
+            serde_json::from_str(&fs::read_to_string(storage_path).unwrap()).unwrap();
+        let persisted_job = persisted_jobs
+            .iter()
+            .find(|job| job.id == "running_job")
+            .unwrap();
+        assert!(!persisted_job.currently_running);
+        assert!(persisted_job.current_session_id.is_none());
+        assert!(persisted_job.process_start_time.is_none());
     }
 
     #[tokio::test]
