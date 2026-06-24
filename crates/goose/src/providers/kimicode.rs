@@ -384,11 +384,11 @@ impl Provider for KimiCodeProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let mut payload = create_request(model_config, system, messages, tools)
             .map_err(|e| ProviderError::RequestFailed(e.to_string()))?;
         payload
@@ -401,7 +401,7 @@ impl Provider for KimiCodeProvider {
 
         let response = self
             .with_retry(|| async {
-                let resp = self.post(Some(session_id), &payload).await?;
+                let resp = self.post(Some(session_id.as_str()), &payload).await?;
                 handle_status(resp).await
             })
             .await

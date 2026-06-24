@@ -132,11 +132,11 @@ impl Provider for TetrateProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let payload = create_request(
             model_config,
             system,
@@ -152,7 +152,7 @@ impl Provider for TetrateProvider {
             .with_retry(|| async {
                 let resp = self
                     .api_client
-                    .response_post(Some(session_id), "v1/chat/completions", &payload)
+                    .response_post(Some(&session_id), "v1/chat/completions", &payload)
                     .await?;
                 let resp = handle_status(resp)
                     .await

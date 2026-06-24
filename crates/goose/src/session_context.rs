@@ -1,6 +1,7 @@
 use tokio::task_local;
 
-pub const SESSION_ID_HEADER: &str = "agent-session-id";
+pub use goose_providers::session_context::SESSION_ID_HEADER;
+
 pub const TOOL_CALL_REQUEST_ID_HEADER: &str = "agent-tool-call-request-id";
 pub const WORKING_DIR_HEADER: &str = "agent-working-dir";
 
@@ -13,7 +14,8 @@ where
     F: std::future::Future,
 {
     if let Some(id) = session_id {
-        SESSION_ID.scope(Some(id), f).await
+        let provider_scope = goose_providers::session_context::with_session_id(&id, f);
+        SESSION_ID.scope(Some(id.clone()), provider_scope).await
     } else {
         f.await
     }

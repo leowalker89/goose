@@ -158,13 +158,12 @@ impl Provider for HuggingFaceProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
         self.inner
-            .stream(model_config, session_id, system, messages, tools)
+            .stream(model_config, system, messages, tools)
             .await
     }
 }

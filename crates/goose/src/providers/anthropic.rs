@@ -285,11 +285,11 @@ impl Provider for AnthropicProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let mut payload = create_request_with_options_for_provider(
             ANTHROPIC_PROVIDER_NAME,
             model_config,
@@ -307,7 +307,7 @@ impl Provider for AnthropicProvider {
 
         let response = self
             .with_retry(|| async {
-                let request = self.api_client.request(Some(session_id), "v1/messages");
+                let request = self.api_client.request(Some(&session_id), "v1/messages");
                 let resp = request.response_post(&payload).await?;
                 handle_status(resp).await
             })

@@ -564,24 +564,19 @@ impl Provider for GithubCopilotProvider {
     }
 
     #[tracing::instrument(
-        skip(self, model_config, session_id, system, messages, tools),
-        fields(session.id = %session_id, gen_ai.request.model = %model_config.model_name)
+        skip(self, model_config, system, messages, tools),
+        fields(session.id = %goose_providers::session_context::current_session_id(), gen_ai.request.model = %model_config.model_name)
     )]
     async fn complete(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
         IS_AGENT_CALL
             .scope(true, async {
-                collect_stream(
-                    self.stream(model_config, session_id, system, messages, tools)
-                        .await?,
-                )
-                .await
+                collect_stream(self.stream(model_config, system, messages, tools).await?).await
             })
             .await
     }
@@ -589,11 +584,11 @@ impl Provider for GithubCopilotProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let is_agent_call = IS_AGENT_CALL.try_with(|&v| v).unwrap_or(false);
         let last_is_tool_response = messages.last().is_some_and(|m| {
             m.content
@@ -606,7 +601,7 @@ impl Provider for GithubCopilotProvider {
         if is_openai_responses_model(&model_config.model_name) {
             self.stream_responses(
                 model_config,
-                session_id,
+                &session_id,
                 is_user_initiated,
                 system,
                 messages,
@@ -617,7 +612,7 @@ impl Provider for GithubCopilotProvider {
         } else {
             self.stream_chat_completions(
                 model_config,
-                session_id,
+                &session_id,
                 is_user_initiated,
                 system,
                 messages,

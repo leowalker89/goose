@@ -13,8 +13,9 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::session_context::SESSION_ID_HEADER;
+
 const DEFAULT_PROVIDER_TIMEOUT_SECS: u64 = 600;
-const SESSION_ID_HEADER: &str = "agent-session-id";
 
 pub struct ApiClient {
     client: Client,

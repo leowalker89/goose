@@ -565,11 +565,11 @@ impl Provider for DatabricksProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let (endpoint_name, _) = extract_reasoning_effort(&model_config.model_name);
         let endpoint_info = self.resolve_endpoint_info_cached(&endpoint_name).await.ok();
         let effective_model_name = endpoint_info
@@ -585,7 +585,7 @@ impl Provider for DatabricksProvider {
         } else {
             self.get_endpoint_path(&model_config.model_name, is_responses_model)
         };
-        let client_request_id = self.build_client_request_id(session_id);
+        let client_request_id = self.build_client_request_id(&session_id);
 
         if is_responses_model {
             let responses_model_config;
@@ -627,7 +627,7 @@ impl Provider for DatabricksProvider {
                     let payload_clone = payload.clone();
                     let resp = self
                         .api_client
-                        .response_post(Some(session_id), &path, &payload_clone)
+                        .response_post(Some(&session_id), &path, &payload_clone)
                         .await?;
                     handle_status(resp).await
                 })
@@ -690,7 +690,7 @@ impl Provider for DatabricksProvider {
                 .with_retry(|| async {
                     let resp = self
                         .api_client
-                        .response_post(Some(session_id), &path, &payload)
+                        .response_post(Some(&session_id), &path, &payload)
                         .await?;
                     if !resp.status().is_success() {
                         let status = resp.status();
@@ -710,7 +710,7 @@ impl Provider for DatabricksProvider {
                     self.with_retry(|| async {
                         let resp = self
                             .api_client
-                            .response_post(Some(session_id), &path, &payload)
+                            .response_post(Some(&session_id), &path, &payload)
                             .await?;
                         if !resp.status().is_success() {
                             let status = resp.status();

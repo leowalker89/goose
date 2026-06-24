@@ -581,11 +581,11 @@ impl Provider for OpenAiProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = crate::session_context::current_session_id();
         if self.should_use_responses_api_for_provider(&model_config.model_name) {
             let mut payload = create_responses_request(model_config, system, messages, tools)?;
             payload["stream"] = serde_json::Value::Bool(self.supports_streaming);
@@ -598,7 +598,7 @@ impl Provider for OpenAiProvider {
                     let resp = self
                         .api_client
                         .response_post(
-                            Some(session_id),
+                            Some(&session_id),
                             &Self::map_base_path(
                                 &self.base_path,
                                 "responses",
@@ -659,7 +659,7 @@ impl Provider for OpenAiProvider {
                 .with_retry(|| async {
                     let resp = self
                         .api_client
-                        .response_post(Some(session_id), &self.base_path, &payload)
+                        .response_post(Some(&session_id), &self.base_path, &payload)
                         .await?;
                     handle_status(resp).await
                 })

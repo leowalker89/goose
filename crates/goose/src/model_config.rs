@@ -112,9 +112,11 @@ pub async fn complete_fast(
         .await
         .map_err(|e| ProviderError::ExecutionError(e.to_string()))?;
 
-    match provider
-        .complete(&fast_model_config, session_id, system, messages, tools)
-        .await
+    match goose_providers::session_context::with_session_id(
+        session_id,
+        provider.complete(&fast_model_config, system, messages, tools),
+    )
+    .await
     {
         Ok(response) => Ok(response),
         Err(e) if fast_model_config.model_name != model_config.model_name => {
@@ -124,9 +126,11 @@ pub async fn complete_fast(
                 e,
                 model_config.model_name
             );
-            provider
-                .complete(model_config, session_id, system, messages, tools)
-                .await
+            goose_providers::session_context::with_session_id(
+                session_id,
+                provider.complete(model_config, system, messages, tools),
+            )
+            .await
         }
         Err(e) => Err(e),
     }

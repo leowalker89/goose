@@ -226,15 +226,16 @@ pub async fn classify_planner_response(
     );
 
     let message = Message::user().with_text(&prompt);
-    let (result, _usage) = provider
-        .complete(
+    let (result, _usage) = goose_providers::session_context::with_session_id(
+        session_id,
+        provider.complete(
             &model_config,
-            session_id,
             "Reply only with the classification label: \"plan\" or \"clarifying questions\"",
             &[message],
             &[],
-        )
-        .await?;
+        ),
+    )
+    .await?;
 
     let predicted = result.as_concat_text();
     if predicted.to_lowercase().contains("plan") {
@@ -1058,15 +1059,11 @@ impl CliSession {
     ) -> Result<(), anyhow::Error> {
         let plan_prompt = self.agent.get_plan_prompt(&self.session_id).await?;
         output::show_thinking();
-        let (plan_response, _usage) = reasoner
-            .complete(
-                &model_config,
-                &self.session_id,
-                &plan_prompt,
-                plan_messages.messages(),
-                &[],
-            )
-            .await?;
+        let (plan_response, _usage) = goose_providers::session_context::with_session_id(
+            &self.session_id,
+            reasoner.complete(&model_config, &plan_prompt, plan_messages.messages(), &[]),
+        )
+        .await?;
         output::render_message(&plan_response, self.debug);
         output::hide_thinking();
         let planner_response_type = classify_planner_response(

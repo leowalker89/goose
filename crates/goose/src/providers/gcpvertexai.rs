@@ -604,11 +604,11 @@ impl Provider for GcpVertexAIProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let (mut request, context) = create_request(model_config, system, messages, tools)?;
 
         if matches!(context.provider(), ModelProvider::Anthropic) {
@@ -620,7 +620,7 @@ impl Provider for GcpVertexAIProvider {
         let mut log = start_log(model_config, &request)?;
 
         let response = self
-            .post_stream(model_config, Some(session_id), &request, &context)
+            .post_stream(model_config, Some(&session_id), &request, &context)
             .await
             .inspect_err(|e| {
                 let _ = log.error(e);

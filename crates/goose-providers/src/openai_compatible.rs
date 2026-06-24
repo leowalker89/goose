@@ -105,11 +105,11 @@ impl Provider for OpenAiCompatibleProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = crate::session_context::current_session_id();
         let payload = self.build_request(
             model_config,
             system,
@@ -124,7 +124,7 @@ impl Provider for OpenAiCompatibleProvider {
             .with_retry(|| async {
                 let resp = self
                     .api_client
-                    .response_post(Some(session_id), &completions_path, &payload)
+                    .response_post(Some(&session_id), &completions_path, &payload)
                     .await?;
                 handle_status(resp).await
             })

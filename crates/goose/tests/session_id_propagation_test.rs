@@ -144,16 +144,17 @@ async fn setup_mock_server() -> (MockServer, HeaderCapture, Box<dyn Provider>) {
 async fn make_request(provider: &dyn Provider, session_id: &str) {
     let message = Message::user().with_text("test message");
     let model_config = ModelConfig::new("gpt-5-nano");
-    let _ = provider
-        .complete(
+    let _ = goose_providers::session_context::with_session_id(
+        session_id,
+        provider.complete(
             &model_config,
-            session_id,
             "You are a helpful assistant.",
             &[message],
             &[],
-        )
-        .await
-        .unwrap();
+        ),
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]

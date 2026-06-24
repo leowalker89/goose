@@ -988,11 +988,11 @@ impl Provider for ChatGptCodexProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let mut payload = create_codex_request(model_config, system, messages, tools)
             .map_err(|e| ProviderError::ExecutionError(e.to_string()))?;
         payload["stream"] = serde_json::Value::Bool(true);
@@ -1000,7 +1000,8 @@ impl Provider for ChatGptCodexProvider {
         let response = self
             .with_retry(|| async {
                 let payload_clone = payload.clone();
-                self.post_streaming(Some(session_id), &payload_clone).await
+                self.post_streaming(Some(session_id.as_str()), &payload_clone)
+                    .await
             })
             .await?;
 

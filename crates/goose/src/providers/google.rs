@@ -179,17 +179,17 @@ impl Provider for GoogleProvider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         let payload = create_request(model_config, system, messages, tools)?;
         let mut log = start_log(model_config, &payload)?;
 
         let response = self
             .with_retry(|| async {
-                self.post_stream(Some(session_id), &model_config.model_name, &payload)
+                self.post_stream(Some(&session_id), &model_config.model_name, &payload)
                     .await
             })
             .await

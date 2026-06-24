@@ -153,15 +153,16 @@ async fn test_provider(
     model_config: &goose_providers::model::ModelConfig,
 ) -> Result<(), ProviderError> {
     let messages = vec![Message::user().with_text("Say 'hello' and nothing else.")];
-    provider
-        .complete(
+    goose_providers::session_context::with_session_id(
+        "doctor-check",
+        provider.complete(
             model_config,
-            "doctor-check",
             "Respond as briefly as possible.",
             &messages,
             &[],
-        )
-        .await?;
+        ),
+    )
+    .await?;
     Ok(())
 }
 

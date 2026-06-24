@@ -390,7 +390,6 @@ pub trait Provider: Send + Sync {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
@@ -398,20 +397,17 @@ pub trait Provider: Send + Sync {
 
     /// Complete with a specific model config.
     #[tracing::instrument(
-        skip(self, model_config, session_id, system, messages, tools),
-        fields(session.id = %session_id, gen_ai.request.model = %model_config.model_name)
+        skip(self, model_config, system, messages, tools),
+        fields(session.id = %crate::session_context::current_session_id(), gen_ai.request.model = %model_config.model_name)
     )]
     async fn complete(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
-        let stream = self
-            .stream(model_config, session_id, system, messages, tools)
-            .await?;
+        let stream = self.stream(model_config, system, messages, tools).await?;
         collect_stream(stream).await
     }
 

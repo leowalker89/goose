@@ -377,24 +377,24 @@ impl Provider for DatabricksV2Provider {
     async fn stream(
         &self,
         model_config: &ModelConfig,
-        session_id: &str,
         system: &str,
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        let session_id = goose_providers::session_context::current_session_id();
         match Self::route_for_model(&model_config.model_name) {
             DatabricksV2Route::OpenAiResponses => {
-                self.stream_openai_responses(model_config, session_id, system, messages, tools)
+                self.stream_openai_responses(model_config, &session_id, system, messages, tools)
                     .await
             }
             DatabricksV2Route::AnthropicMessages => {
-                self.stream_anthropic_messages(model_config, session_id, system, messages, tools)
+                self.stream_anthropic_messages(model_config, &session_id, system, messages, tools)
                     .await
             }
             DatabricksV2Route::MlflowChatCompletions => {
                 self.stream_mlflow_chat_completions(
                     model_config,
-                    session_id,
+                    &session_id,
                     system,
                     messages,
                     tools,

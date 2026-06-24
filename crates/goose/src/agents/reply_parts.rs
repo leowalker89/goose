@@ -288,15 +288,16 @@ impl Agent {
         let model_config =
             model_config.with_default_thinking_effort(Config::global().get_goose_thinking_effort());
         debug!("WAITING_LLM_STREAM_START");
-        let stream_result = provider
-            .stream(
+        let stream_result = goose_providers::session_context::with_session_id(
+            session_id,
+            provider.stream(
                 &model_config,
-                session_id,
                 system_prompt.as_str(),
                 messages_for_provider.messages(),
                 &tools,
-            )
-            .await;
+            ),
+        )
+        .await;
         debug!("WAITING_LLM_STREAM_END");
 
         // If there was an error creating the stream, return a stream that yields that error
@@ -635,7 +636,6 @@ mod tests {
         async fn stream(
             &self,
             _model_config: &ModelConfig,
-            _session_id: &str,
             _system: &str,
             _messages: &[Message],
             _tools: &[Tool],
