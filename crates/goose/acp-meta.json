@@ -1,4 +1,11 @@
 {
+  "agentRequests": [
+    {
+      "method": "_goose/unstable/session/recipe/request-params",
+      "requestType": "RequestRecipeParams_unstable",
+      "responseType": "RecipeParamsResponse_unstable"
+    }
+  ],
   "methods": [
     {
       "method": "_goose/unstable/session/extensions/add",
@@ -24,6 +31,21 @@
       "method": "_goose/unstable/resources/read",
       "requestType": "ReadResourceRequest_unstable",
       "responseType": "ReadResourceResponse_unstable"
+    },
+    {
+      "method": "_goose/unstable/apps/list",
+      "requestType": "AppsListRequest_unstable",
+      "responseType": "AppsListResponse_unstable"
+    },
+    {
+      "method": "_goose/unstable/apps/export",
+      "requestType": "AppsExportRequest_unstable",
+      "responseType": "AppsExportResponse_unstable"
+    },
+    {
+      "method": "_goose/unstable/apps/import",
+      "requestType": "AppsImportRequest_unstable",
+      "responseType": "AppsImportResponse_unstable"
     },
     {
       "method": "_goose/unstable/session/working-dir/update",
@@ -375,13 +397,6 @@
     {
       "method": "_goose/unstable/session/update",
       "paramsType": "GooseSessionNotification_unstable"
-    }
-  ],
-  "agentRequests": [
-    {
-      "method": "_goose/unstable/session/recipe/request-params",
-      "requestType": "RequestRecipeParams_unstable",
-      "responseType": "RecipeParamsResponse_unstable"
     }
   ]
 }

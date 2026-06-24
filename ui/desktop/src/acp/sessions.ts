@@ -251,6 +251,11 @@ export async function acpDeleteSession(sessionId: string): Promise<void> {
   await client.goose.sessionDelete({ sessionId });
 }
 
+export async function acpCloseSession(sessionId: string): Promise<void> {
+  const client = await getAcpClient();
+  await client.unstable_closeSession({ sessionId });
+}
+
 export async function acpRenameSession(sessionId: string, title: string): Promise<void> {
   const client = await getAcpClient();
   await client.goose.sessionRename_unstable({ sessionId, title });

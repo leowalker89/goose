@@ -83,6 +83,7 @@ use uuid::Uuid;
 mod agent_requests;
 pub use agent_requests::agent_request_schemas;
 mod agent_mentions;
+mod apps;
 mod config;
 mod custom_dispatch;
 mod diagnostics;

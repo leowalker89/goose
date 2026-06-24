@@ -11,6 +11,12 @@ import type { Client } from "@agentclientprotocol/sdk";
 import type {
   AddConfigExtensionRequest_unstable,
   AddSessionExtensionRequest_unstable,
+  AppsExportRequest_unstable,
+  AppsExportResponse_unstable,
+  AppsImportRequest_unstable,
+  AppsImportResponse_unstable,
+  AppsListRequest_unstable,
+  AppsListResponse_unstable,
   ArchiveSessionRequest_unstable,
   CreateSourceRequest_unstable,
   CreateSourceResponse_unstable,
@@ -134,6 +140,9 @@ import type {
   UpdateWorkingDirRequest_unstable,
 } from './types.gen.js';
 import {
+  zAppsExportResponse_unstable,
+  zAppsImportResponse_unstable,
+  zAppsListResponse_unstable,
   zCreateSourceResponse_unstable,
   zCustomProviderCreateResponse_unstable,
   zCustomProviderDeleteResponse_unstable,
@@ -228,6 +237,37 @@ export class GooseExtClient {
     return zReadResourceResponse_unstable.parse(
       raw,
     ) as ReadResourceResponse_unstable;
+  }
+
+  async appsList_unstable(
+    params: AppsListRequest_unstable,
+  ): Promise<AppsListResponse_unstable> {
+    const raw = await this.conn.extMethod("_goose/unstable/apps/list", params);
+    return zAppsListResponse_unstable.parse(raw) as AppsListResponse_unstable;
+  }
+
+  async appsExport_unstable(
+    params: AppsExportRequest_unstable,
+  ): Promise<AppsExportResponse_unstable> {
+    const raw = await this.conn.extMethod(
+      "_goose/unstable/apps/export",
+      params,
+    );
+    return zAppsExportResponse_unstable.parse(
+      raw,
+    ) as AppsExportResponse_unstable;
+  }
+
+  async appsImport_unstable(
+    params: AppsImportRequest_unstable,
+  ): Promise<AppsImportResponse_unstable> {
+    const raw = await this.conn.extMethod(
+      "_goose/unstable/apps/import",
+      params,
+    );
+    return zAppsImportResponse_unstable.parse(
+      raw,
+    ) as AppsImportResponse_unstable;
   }
 
   async sessionWorkingDirUpdate_unstable(
