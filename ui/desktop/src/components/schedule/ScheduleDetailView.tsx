@@ -163,9 +163,7 @@ const ScheduleDetailView: React.FC<ScheduleDetailViewProps> = ({ scheduleId, onN
     try {
       const result = await acpRunScheduleNow(scheduleId);
       trackScheduleRunNow(true);
-      if (result.status === 'cancelled') {
-        toastSuccess({ title: intl.formatMessage(i18n.jobCancelled), msg: intl.formatMessage(i18n.jobCancelledMsg) });
-      } else if (result.sessionId) {
+      if (result.status === 'completed' && result.sessionId) {
         toastSuccess({ title: intl.formatMessage(i18n.scheduleCompleted), msg: intl.formatMessage(i18n.completedSession, { sessionId: result.sessionId }) });
       }
       await fetchSessions(scheduleId);
